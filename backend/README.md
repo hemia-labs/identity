@@ -249,6 +249,71 @@ Usar cuando la app cliente es un producto interno de confianza, por ejemplo `con
 
 Este flujo no es OAuth estandar. Es un SSO simple interno basado en code temporal de un solo uso.
 
+### Modelo recomendado para sistemas internos Hemia
+
+Hemia debe modelarse como un tenant normal, no como un caso especial hardcodeado.
+
+```txt
+Tenant: Hemia
+  Organizaciones/equipos:
+    - Hemia HQ
+    - Producto
+    - Soporte
+
+  Usuarios:
+    - cristian@hemia.mx
+    - soporte@hemia.mx
+
+  Apps internas:
+    - hemia_console
+    - hemia_crm
+    - hemia_deploy
+    - hemia_admin
+```
+
+Regla conceptual:
+
+```txt
+tenant_id   = contexto organizacional activo
+client_id   = app que solicita acceso
+membership  = permisos del usuario dentro del tenant/org/team
+issuer      = Hemia ID, por ejemplo https://id.hemia.cloud
+```
+
+Ejemplo para un usuario interno entrando a Hemia Console:
+
+```txt
+tenant_id = Hemia
+client_id = hemia_console
+audience  = hemia_console
+issuer    = https://id.hemia.cloud
+```
+
+Ejemplo para un cliente externo usando la misma Hemia Console:
+
+```txt
+tenant_id = Cliente ABC
+client_id = hemia_console
+audience  = hemia_console
+issuer    = https://id.hemia.cloud
+```
+
+La app puede ser la misma (`hemia_console`), pero el contexto activo cambia por tenant, organizacion o equipo. Por eso el backend no debe inferir permisos solo por `client_id`; debe combinarlos con membership y contexto activo.
+
+Para productos first-party de Hemia, registrar el cliente con politica de confianza:
+
+```txt
+client_id: hemia_console
+first_party: true
+requires_consent: false
+allowed_tenant_ids:
+  - <tenant_id_hemia>
+allowed_redirect_uris:
+  - https://console.hemia.cloud/auth/callback
+```
+
+Si esos campos aun no existen en schema, tratarlos como politica objetivo. No hardcodear `Hemia` como bypass; agregar flags/configuracion explicita al cliente cuando haga falta.
+
 Preparacion:
 
 1. Crear un registro en `sso_clients`.
