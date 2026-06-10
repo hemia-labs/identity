@@ -8,7 +8,9 @@ export const envValidationSchema = Joi.object({
     .valid('development', 'test', 'production')
     .default('development'),
   PORT: Joi.number().port().default(3000),
-  APP_CORS_ORIGINS: Joi.string().allow('').default('http://localhost:5173'),
+  APP_CORS_ORIGINS: Joi.string()
+    .allow('')
+    .default('http://localhost:5173,http://localhost:3001'),
   APP_ISSUER: Joi.string().uri().default('https://id.hemia.cloud'),
   ID_FRONTEND_URL: Joi.string().uri().default('http://localhost:5173'),
   AUTH_ALLOWED_REDIRECT_URIS: Joi.string()
@@ -59,6 +61,11 @@ export const envValidationSchema = Joi.object({
         .min(32)
         .default('dev_oauth_state_secret_change_me_32_chars'),
     }),
+  JWKS_KEY_KID: Joi.string().default('local-dev-rs256'),
+  JWKS_PRIVATE_KEY_PATH: Joi.string()
+    .allow('')
+    .default('./secrets/jwks-private.pem'),
+  JWKS_PRIVATE_KEY: Joi.string().allow('').default(''),
 
   GOOGLE_CLIENT_ID: Joi.string().when('NODE_ENV', {
     is: 'production',

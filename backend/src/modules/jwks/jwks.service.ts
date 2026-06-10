@@ -29,10 +29,14 @@ export class JwksService {
     });
 
     if (storedKey) {
+      const publicKey = createPublicKey(storedKey.privateKeyEncrypted)
+        .export({ type: 'spki', format: 'pem' })
+        .toString();
+
       return {
         kid: storedKey.kid,
         alg: storedKey.alg,
-        publicKey: storedKey.publicKey,
+        publicKey,
         privateKey: storedKey.privateKeyEncrypted,
       };
     }

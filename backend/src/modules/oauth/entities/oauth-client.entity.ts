@@ -31,6 +31,9 @@ export class OAuthClientEntity {
   @Column({ name: 'client_id', length: 120 })
   clientId: string;
 
+  @Column({ length: 160 })
+  audience: string;
+
   @Column({ name: 'client_secret_hash', type: 'varchar', length: 255, nullable: true })
   clientSecretHash?: string | null;
 
@@ -48,6 +51,9 @@ export class OAuthClientEntity {
 
   @Column({ type: 'text', array: true, default: '{}' })
   scopes: string[];
+
+  @Column({ name: 'requires_consent', default: true })
+  requiresConsent: boolean;
 
   @Column({
     type: 'enum',

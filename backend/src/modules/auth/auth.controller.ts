@@ -13,6 +13,7 @@ import type { Request, Response } from 'express';
 import { CurrentSession } from '../../common/decorators/current-session.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import type { AuthenticatedUser } from '../../common/types/authenticated-request.type';
 import {
   ACCESS_TOKEN_COOKIE,
@@ -93,15 +94,21 @@ export class AuthController {
     return { session: result.session };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @Post('logout')
   async logout(
-    @CurrentSession() sessionId: string,
+    @Req() request: Request & { user?: AuthenticatedUser | null },
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.authService.logout(sessionId);
-    this.clearAuthCookies(response);
-    return result;
+    try {
+      const result = request.user?.sessionId
+        ? await this.authService.logout(request.user.sessionId)
+        : { revoked: false };
+      this.clearAuthCookies(response);
+      return { ...result, cleared: true };
+    } catch {
+      return { revoked: false };
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -173,9 +180,27 @@ export class AuthController {
   }
 
   private clearAuthCookies(response: Response) {
-    const options = this.getBaseCookieOptions();
-    response.clearCookie(ACCESS_TOKEN_COOKIE, options);
-    response.clearCookie(REFRESH_TOKEN_COOKIE, options);
+    this.expireAuthCookie(response, ACCESS_TOKEN_COOKIE);
+    this.expireAuthCookie(response, REFRESH_TOKEN_COOKIE);
+  }
+
+  private expireAuthCookie(response: Response, name: string) {
+    const baseOptions = this.getBaseCookieOptions();
+    const configuredDomain = baseOptions.domain;
+    const paths = ['/', '/api/v1', '/api/v1/auth', '/oauth'];
+    const domains = configuredDomain ? [configuredDomain, undefined] : [undefined];
+
+    for (const path of paths) {
+      for (const domain of domains) {
+        response.cookie(name, '', {
+          ...baseOptions,
+          domain,
+          path,
+          expires: new Date(0),
+          maxAge: 0,
+        });
+      }
+    }
   }
 
   private getBaseCookieOptions() {

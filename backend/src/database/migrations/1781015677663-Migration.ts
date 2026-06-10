@@ -1,18 +1,21 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class Migration1780704047178 implements MigrationInterface {
-    name = 'Migration1780704047178'
+export class Migration1781015677663 implements MigrationInterface {
+    name = 'Migration1781015677663'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`CREATE TYPE "public"."users_status_enum" AS ENUM('active', 'inactive', 'pending', 'locked', 'deleted')`);
         await queryRunner.query(`CREATE TABLE "users" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "email" character varying(320) NOT NULL, "username" character varying(100), "password_hash" character varying(255), "first_name" character varying(100) NOT NULL, "last_name" character varying(100) NOT NULL, "avatar_url" character varying(2048), "status" "public"."users_status_enum" NOT NULL DEFAULT 'pending', "locked_at" TIMESTAMP WITH TIME ZONE, "last_login_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_users_username_active_unique" ON "users" ("username") WHERE "deleted_at" IS NULL AND "username" IS NOT NULL`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_users_email_active_unique" ON "users" ("email") WHERE "deleted_at" IS NULL`);
+        await queryRunner.query(`CREATE TYPE "public"."tenants_status_enum" AS ENUM('trial', 'active', 'suspended', 'cancelled', 'deleted')`);
         await queryRunner.query(`CREATE TABLE "tenants" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" character varying(160) NOT NULL, "slug" character varying(120) NOT NULL, "status" "public"."tenants_status_enum" NOT NULL DEFAULT 'trial', "plan" character varying(80), "owner_user_id" uuid, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_53be67a04681c66b87ee27c9321" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_tenants_slug_active_unique" ON "tenants" ("slug") WHERE "deleted_at" IS NULL`);
         await queryRunner.query(`CREATE TABLE "organizations" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "tenant_id" uuid NOT NULL, "name" character varying(160) NOT NULL, "slug" character varying(120) NOT NULL, "legal_name" character varying(240), "tax_id" character varying(80), "branding" jsonb, "settings" jsonb, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_6b031fcd0863e3f6b44230163f9" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_organizations_tenant_slug_active_unique" ON "organizations" ("tenant_id", "slug") WHERE "deleted_at" IS NULL`);
         await queryRunner.query(`CREATE TABLE "teams" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "tenant_id" uuid NOT NULL, "organization_id" uuid, "name" character varying(160) NOT NULL, "slug" character varying(120) NOT NULL, "description" text, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_7e5523774a38b08a6236d322403" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_teams_tenant_org_slug_active_unique" ON "teams" ("tenant_id", "organization_id", "slug") WHERE "deleted_at" IS NULL`);
+        await queryRunner.query(`CREATE TYPE "public"."sso_clients_status_enum" AS ENUM('active', 'suspended', 'deleted')`);
         await queryRunner.query(`CREATE TABLE "sso_clients" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "client_id" character varying(120) NOT NULL, "name" character varying(160) NOT NULL, "allowed_redirect_uris" text array NOT NULL, "allowed_origins" text array NOT NULL DEFAULT '{}', "status" "public"."sso_clients_status_enum" NOT NULL DEFAULT 'active', "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_cfd4f69040f6082c7608e68f3aa" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_sso_clients_client_id_active_unique" ON "sso_clients" ("client_id") WHERE "deleted_at" IS NULL`);
         await queryRunner.query(`CREATE TABLE "sessions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "user_id" uuid NOT NULL, "tenant_id" uuid, "organization_id" uuid, "team_id" uuid, "session_family_id" uuid NOT NULL, "refresh_token_hash" character varying(255) NOT NULL, "device_name" character varying(160), "ip_address" inet, "user_agent" text, "is_active" boolean NOT NULL DEFAULT true, "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, "revoked_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_3238ef96f18b355b671619111bc" PRIMARY KEY ("id"))`);
@@ -46,14 +49,18 @@ export class Migration1780704047178 implements MigrationInterface {
         await queryRunner.query(`CREATE INDEX "IDX_oauth_tokens_client_id" ON "oauth_tokens" ("client_id") `);
         await queryRunner.query(`CREATE INDEX "IDX_oauth_tokens_refresh_token_hash" ON "oauth_tokens" ("refresh_token_hash") `);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_oauth_tokens_token_hash" ON "oauth_tokens" ("token_hash") `);
-        await queryRunner.query(`CREATE TABLE "oauth_clients" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "client_id" character varying(120) NOT NULL, "client_secret_hash" character varying(255), "type" "public"."oauth_clients_type_enum" NOT NULL, "redirect_uris" text array NOT NULL DEFAULT '{}', "grant_types" text array NOT NULL DEFAULT '{}', "response_types" text array NOT NULL DEFAULT '{}', "scopes" text array NOT NULL DEFAULT '{}', "status" "public"."oauth_clients_status_enum" NOT NULL DEFAULT 'active', "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_c4759172d3431bae6f04e678e0d" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TYPE "public"."oauth_clients_type_enum" AS ENUM('public', 'confidential')`);
+        await queryRunner.query(`CREATE TYPE "public"."oauth_clients_status_enum" AS ENUM('active', 'suspended', 'deleted')`);
+        await queryRunner.query(`CREATE TABLE "oauth_clients" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "client_id" character varying(120) NOT NULL, "audience" character varying(160) NOT NULL, "client_secret_hash" character varying(255), "type" "public"."oauth_clients_type_enum" NOT NULL, "redirect_uris" text array NOT NULL DEFAULT '{}', "grant_types" text array NOT NULL DEFAULT '{}', "response_types" text array NOT NULL DEFAULT '{}', "scopes" text array NOT NULL DEFAULT '{}', "requires_consent" boolean NOT NULL DEFAULT true, "status" "public"."oauth_clients_status_enum" NOT NULL DEFAULT 'active', "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_c4759172d3431bae6f04e678e0d" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_oauth_clients_client_id_active_unique" ON "oauth_clients" ("client_id") WHERE "deleted_at" IS NULL`);
         await queryRunner.query(`CREATE TABLE "oauth_authorization_codes" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "code_hash" character varying(64) NOT NULL, "client_id" character varying(120) NOT NULL, "user_id" uuid NOT NULL, "session_id" uuid NOT NULL, "redirect_uri" text NOT NULL, "scope" text NOT NULL, "code_challenge" text NOT NULL, "code_challenge_method" character varying(10) NOT NULL, "nonce" text, "state" text, "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, "used_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_441350d3fce3606534fbb2c1197" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE INDEX "IDX_oauth_authorization_codes_expires_at" ON "oauth_authorization_codes" ("expires_at") `);
         await queryRunner.query(`CREATE INDEX "IDX_oauth_authorization_codes_client_id" ON "oauth_authorization_codes" ("client_id") `);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_oauth_authorization_codes_code_hash" ON "oauth_authorization_codes" ("code_hash") `);
+        await queryRunner.query(`CREATE TYPE "public"."memberships_status_enum" AS ENUM('active', 'invited', 'suspended', 'removed')`);
         await queryRunner.query(`CREATE TABLE "memberships" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "user_id" uuid NOT NULL, "tenant_id" uuid NOT NULL, "organization_id" uuid, "team_id" uuid, "status" "public"."memberships_status_enum" NOT NULL DEFAULT 'invited', "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_25d28bd932097a9e90495ede7b4" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_memberships_scope_active_unique" ON "memberships" ("user_id", "tenant_id", "organization_id", "team_id") WHERE "deleted_at" IS NULL`);
+        await queryRunner.query(`CREATE TYPE "public"."jwks_keys_status_enum" AS ENUM('active', 'rotated', 'revoked')`);
         await queryRunner.query(`CREATE TABLE "jwks_keys" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "kid" character varying(80) NOT NULL, "alg" character varying(20) NOT NULL DEFAULT 'RS256', "public_key" text NOT NULL, "private_key_encrypted" text NOT NULL, "status" "public"."jwks_keys_status_enum" NOT NULL DEFAULT 'active', "rotated_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_f34118b5ad5b54a309e5fd0fdd2" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_jwks_keys_kid" ON "jwks_keys" ("kid") `);
         await queryRunner.query(`CREATE TYPE "public"."external_accounts_provider_enum" AS ENUM('google')`);
@@ -123,14 +130,18 @@ export class Migration1780704047178 implements MigrationInterface {
         await queryRunner.query(`DROP TYPE "public"."external_accounts_provider_enum"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_jwks_keys_kid"`);
         await queryRunner.query(`DROP TABLE "jwks_keys"`);
+        await queryRunner.query(`DROP TYPE "public"."jwks_keys_status_enum"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_memberships_scope_active_unique"`);
         await queryRunner.query(`DROP TABLE "memberships"`);
+        await queryRunner.query(`DROP TYPE "public"."memberships_status_enum"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_oauth_authorization_codes_code_hash"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_oauth_authorization_codes_client_id"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_oauth_authorization_codes_expires_at"`);
         await queryRunner.query(`DROP TABLE "oauth_authorization_codes"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_oauth_clients_client_id_active_unique"`);
         await queryRunner.query(`DROP TABLE "oauth_clients"`);
+        await queryRunner.query(`DROP TYPE "public"."oauth_clients_status_enum"`);
+        await queryRunner.query(`DROP TYPE "public"."oauth_clients_type_enum"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_oauth_tokens_token_hash"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_oauth_tokens_refresh_token_hash"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_oauth_tokens_client_id"`);
@@ -164,15 +175,18 @@ export class Migration1780704047178 implements MigrationInterface {
         await queryRunner.query(`DROP TABLE "sessions"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_sso_clients_client_id_active_unique"`);
         await queryRunner.query(`DROP TABLE "sso_clients"`);
+        await queryRunner.query(`DROP TYPE "public"."sso_clients_status_enum"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_teams_tenant_org_slug_active_unique"`);
         await queryRunner.query(`DROP TABLE "teams"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_organizations_tenant_slug_active_unique"`);
         await queryRunner.query(`DROP TABLE "organizations"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_tenants_slug_active_unique"`);
         await queryRunner.query(`DROP TABLE "tenants"`);
+        await queryRunner.query(`DROP TYPE "public"."tenants_status_enum"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_users_email_active_unique"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_users_username_active_unique"`);
         await queryRunner.query(`DROP TABLE "users"`);
+        await queryRunner.query(`DROP TYPE "public"."users_status_enum"`);
     }
 
 }

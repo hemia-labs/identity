@@ -19,6 +19,7 @@ export class OidcService {
       authorization_endpoint: `${issuer}/oauth/authorize`,
       token_endpoint: `${issuer}/oauth/token`,
       revocation_endpoint: `${issuer}/oauth/revoke`,
+      end_session_endpoint: `${issuer}/oauth/logout`,
       introspection_endpoint: `${issuer}/oauth/introspect`,
       userinfo_endpoint: `${issuer}/oidc/userinfo`,
       jwks_uri: `${issuer}/.well-known/jwks.json`,

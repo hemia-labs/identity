@@ -856,7 +856,7 @@ SUPER_ADMIN_LAST_NAME=Admin
 SUPER_ADMIN_PASSWORD=change_me_strong_password
 
 JWKS_KEY_KID=local-dev-rs256
-JWKS_PRIVATE_KEY_BASE64=base64_encoded_pkcs8_private_key_pem
+JWKS_PRIVATE_KEY_PATH=./secrets/jwks-private.pem
 ```
 
 Ejecutar en local:
@@ -874,9 +874,9 @@ SUPER_ADMIN_FIRST_NAME='Hemia' \
 SUPER_ADMIN_LAST_NAME='Admin' \
 SUPER_ADMIN_PASSWORD='change_me_strong_password' \
 JWKS_KEY_KID='prod-rs256-2026-01' \
-JWKS_PRIVATE_KEY_BASE64='base64_encoded_pkcs8_private_key_pem' \
+JWKS_PRIVATE_KEY_PATH='./secrets/jwks-private.pem' \
 bun --cwd backend seed:run
 ```
 
 El seed es idempotente: si el email ya existe y no esta borrado, actualiza username, nombre, password y status a `active`, y asegura el rol `SUPER_ADMIN`.
-Para JWKS, si ya existe una llave activa no crea otra. Si no existe, deriva `public_key` desde `JWKS_PRIVATE_KEY_BASE64` o `JWKS_PRIVATE_KEY` e inserta la llave como `active`.
+Para JWKS, deriva `public_key` desde `JWKS_PRIVATE_KEY_PATH` o `JWKS_PRIVATE_KEY`. Si ya existe una llave activa con el mismo `kid` y private key, no crea otra. Si `JWKS_KEY_KID` cambia, rota la llave activa anterior e inserta la nueva como `active`.

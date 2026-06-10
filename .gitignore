@@ -11,3 +11,6 @@ hemia_id_frontend.md
 *.lock
 .agents/
 .vscode/
+hemia_id_docs_sso.md
+secrets/
+hemia_docs_backend_sso_steps.md

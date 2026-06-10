@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toTypedSchema } from '@vee-validate/zod'
-import { ArrowRight, KeyRound, Loader2, Mail, ShieldCheck } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { Building2, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Mail, ShieldCheck } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { GenericObject } from 'vee-validate'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -20,6 +20,7 @@ const authStore = useAuthStore()
 const validationSchema = toTypedSchema(loginSchema)
 const loginMutation = useLoginMutation()
 const errorMessage = computed(() => loginMutation.error.value ? getErrorMessage(loginMutation.error.value) : null)
+const showPassword = ref(false)
 
 async function submit(values: GenericObject) {
   const result = await loginMutation.mutateAsync({
@@ -38,18 +39,24 @@ async function submit(values: GenericObject) {
 </script>
 
 <template>
-  <Form v-slot="{ meta, isSubmitting }" :validation-schema="validationSchema" class="space-y-5" @submit="submit">
+  <Form v-slot="{ isSubmitting }" :validation-schema="validationSchema" class="space-y-6" @submit="submit">
     <Alert v-if="errorMessage" variant="destructive">
       <AlertDescription>{{ errorMessage }}</AlertDescription>
     </Alert>
 
+    <div class="mx-auto flex w-fit items-center gap-3 rounded-full border border-[#dbe4f2] bg-[#f4f7fb] px-4 py-2 text-sm font-semibold text-[#182253] shadow-inner">
+      <Building2 class="h-5 w-5 text-[#667491]" />
+      <span>Organizacion: Hemia Technologies</span>
+      <CheckCircle2 class="h-5 w-5 text-[#35b97f]" />
+    </div>
+
     <FormField v-slot="{ componentField }" name="email">
       <FormItem>
-        <FormLabel>Correo</FormLabel>
+        <FormLabel class="text-[#080b67]">Correo de trabajo</FormLabel>
         <FormControl>
           <div class="relative">
-            <Mail class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input class="pl-9" type="email" autocomplete="email" placeholder="tu@empresa.com" v-bind="componentField" />
+            <Mail class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#7383a1]" />
+            <Input class="h-12 rounded-md border-[#cfd9ec] bg-white pl-14 text-base shadow-none placeholder:text-[#71809b] focus-visible:ring-[#2568ff]" type="email" autocomplete="email" placeholder="nombre@empresa.com" v-bind="componentField" />
           </div>
         </FormControl>
         <FormMessage />
@@ -58,32 +65,43 @@ async function submit(values: GenericObject) {
 
     <FormField v-slot="{ componentField }" name="password">
       <FormItem>
-        <FormLabel>Password</FormLabel>
+        <FormLabel class="text-[#080b67]">Contrasena</FormLabel>
         <FormControl>
           <div class="relative">
-            <KeyRound class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input class="pl-9" type="password" autocomplete="current-password" placeholder="Minimo 8 caracteres" v-bind="componentField" />
+            <KeyRound class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#7383a1]" />
+            <Input class="h-12 rounded-md border-[#cfd9ec] bg-white px-14 text-base shadow-none placeholder:text-[#71809b] focus-visible:ring-[#2568ff]" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" placeholder="Minimo 8 caracteres" v-bind="componentField" />
+            <button class="absolute right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#465a7f] hover:bg-[#edf3ff]" type="button" :aria-label="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'" @click="showPassword = !showPassword">
+              <EyeOff v-if="showPassword" class="h-5 w-5" />
+              <Eye v-else class="h-5 w-5" />
+            </button>
           </div>
         </FormControl>
         <FormMessage />
       </FormItem>
     </FormField>
 
-    <Button class="h-11 w-full" type="submit" :disabled="!meta.valid || isSubmitting || loginMutation.isPending.value">
+    <Button class="h-12 w-full bg-[#2568ff] text-base font-bold shadow-[0_14px_28px_rgba(37,104,255,0.28)] hover:bg-[#1558ef]" type="submit" :disabled="isSubmitting || loginMutation.isPending.value">
       <Loader2 v-if="isSubmitting || loginMutation.isPending.value" class="mr-2 h-4 w-4 animate-spin" />
-      <ArrowRight v-else class="mr-2 h-4 w-4" />
-      Entrar
+      Continuar
     </Button>
 
-    <Separator />
+    <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+      <Separator class="bg-[#cfd9ec]" />
+      <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[#edf3ff] text-xs font-bold text-[#2568ff]">o</span>
+      <Separator class="bg-[#cfd9ec]" />
+    </div>
 
-    <div class="rounded-md border bg-muted/35 p-3">
+    <Button class="h-12 w-full border-[#2568ff] bg-white text-base font-bold text-[#0f5cff] hover:bg-[#f4f7ff]" type="button" variant="outline">
+      <Building2 class="mr-3 h-6 w-6" />
+      Continuar con SSO corporativo
+    </Button>
+
+    <div class="rounded-md border border-[#dce6f8] bg-[#f7fbff] p-4">
       <div class="flex items-start gap-3">
-        <ShieldCheck class="mt-0.5 h-4 w-4 text-emerald-600" />
+        <ShieldCheck class="mt-1 h-7 w-7 text-[#0f5cff]" />
         <div>
-          <p class="text-sm font-medium">Sesion protegida</p>
-          <p class="mt-1 text-xs leading-5 text-muted-foreground">
-            Despues del login puedes validar MFA, seleccionar cuenta y autorizar permisos.
+          <p class="text-base leading-7 text-[#182253]">
+            Tu inicio de sesion puede requerir MFA, seleccion de organizacion y autorizacion de permisos.
           </p>
         </div>
       </div>

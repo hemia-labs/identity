@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { UserPlus } from 'lucide-vue-next'
+import { ChevronRight, UserPlus } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SelectionLayout from '@/app/layouts/SelectionLayout.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAccountStore } from '@/features/accounts/stores/account.store'
@@ -55,36 +54,37 @@ async function selectAccount(accountIndex: number) {
 
 <template>
   <SelectionLayout title="Selecciona una cuenta" description="Elige la identidad local con la que quieres continuar.">
-    <div class="grid gap-3">
+    <div class="grid max-w-6xl gap-7">
       <Alert v-if="accountsQuery.error.value || switchAccountMutation.error.value" variant="destructive">
         <AlertDescription>
           {{ getErrorMessage(accountsQuery.error.value ?? switchAccountMutation.error.value) }}
         </AlertDescription>
       </Alert>
       <template v-if="accountsQuery.isLoading.value">
-        <Skeleton class="h-20 w-full" />
-        <Skeleton class="h-20 w-full" />
+        <Skeleton class="h-40 w-full rounded-md" />
+        <Skeleton class="h-24 w-full rounded-md" />
       </template>
-      <Card v-for="account in accountsQuery.data.value" :key="account.accountIndex" class="overflow-hidden">
+      <Card v-for="account in accountsQuery.data.value" :key="account.accountIndex" class="overflow-hidden rounded-md border-[#d5e0f4] bg-white/92 shadow-[0_12px_32px_rgba(20,21,111,0.10)] transition-shadow hover:shadow-[0_18px_48px_rgba(20,21,111,0.14)]">
         <button class="w-full text-left disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="switchAccountMutation.isPending.value" @click="selectAccount(account.accountIndex)">
-          <CardContent class="flex items-center gap-4 p-4">
-            <Avatar>
-              <AvatarFallback>{{ getAccountInitials(account.accountIndex) }}</AvatarFallback>
+          <CardContent class="flex min-h-[116px] items-center gap-5 p-5 sm:min-h-[154px] sm:gap-8 sm:p-8">
+            <Avatar class="h-16 w-16 border border-[#d5e0f4] bg-white p-1 sm:h-[100px] sm:w-[100px]">
+              <AvatarFallback class="bg-[#225cff] text-xl font-medium text-white shadow-[inset_0_0_30px_rgba(255,255,255,0.14)] sm:text-[32px]">{{ getAccountInitials(account.accountIndex) }}</AvatarFallback>
             </Avatar>
             <div class="min-w-0 flex-1">
-              <p class="font-medium">{{ getAccountLabel(account.accountIndex) }}</p>
-              <p class="truncate text-sm text-muted-foreground">{{ getAccountSubtitle(account) }}</p>
+              <p class="text-xl font-bold leading-tight text-[#080b67] sm:text-[28px]">{{ getAccountLabel(account.accountIndex) }}</p>
+              <p class="mt-2 truncate text-base text-[#5b6d94] sm:mt-3 sm:text-xl">{{ getAccountSubtitle(account) }}</p>
             </div>
-            <Badge variant="secondary">{{ account.status }}</Badge>
+            <Badge variant="secondary" class="rounded-md bg-[#e8eeff] px-3 py-1.5 text-sm font-bold text-[#080b67] sm:px-5 sm:py-2 sm:text-lg">{{ account.status }}</Badge>
           </CardContent>
         </button>
       </Card>
-      <Button variant="outline" class="justify-start" @click="router.push('/login')">
-        <UserPlus class="mr-2 h-4 w-4" />
-        Usar otra cuenta
-      </Button>
+      <button class="flex min-h-[92px] items-center gap-5 rounded-md border border-[#d5e0f4] bg-white/70 px-7 text-left text-[#080b67] shadow-[0_10px_26px_rgba(20,21,111,0.08)] transition hover:bg-white hover:shadow-[0_16px_40px_rgba(20,21,111,0.12)] sm:min-h-[104px] sm:gap-8 sm:px-10" type="button" @click="router.push('/login')">
+        <UserPlus class="h-7 w-7 text-[#1f55f2] sm:h-8 sm:w-8" />
+        <span class="flex-1 text-xl font-semibold sm:text-2xl">Usar otra cuenta</span>
+        <ChevronRight class="h-7 w-7 sm:h-8 sm:w-8" />
+      </button>
     </div>
-    <p class="mt-6 text-sm text-muted-foreground">
+    <p class="mt-8 text-xl text-[#5b6d94]">
       Sesion {{ sessionQuery.data.value?.sessionId }} · expira {{ sessionQuery.data.value?.expiresAt }}
     </p>
   </SelectionLayout>

@@ -30,7 +30,7 @@ export const configureApp = (
       { path: 'oidc/(.*)', method: RequestMethod.ALL },
     ],
   });
-  app.use(requestContextMiddleware);
+  // app.use(requestContextMiddleware);
   app.use(cookieParser());
   app.useGlobalFilters(new GlobalExceptionFilter(logger));
   app.enableCors({

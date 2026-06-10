@@ -12,6 +12,7 @@ import { IsNull, Repository } from 'typeorm';
 import { AuthenticatedUser } from '../../common/types/authenticated-request.type';
 import { ConsentsService } from '../consents/consents.service';
 import { JwksService } from '../jwks/jwks.service';
+import { RolesService } from '../roles/roles.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { UsersService } from '../users/users.service';
 import { OAuthAuthorizeQueryDto } from './dtos/oauth-authorize-query.dto';
@@ -28,6 +29,7 @@ import { OAuthTokenEntity } from './entities/oauth-token.entity';
 
 const ACCESS_TOKEN_SECONDS = 900;
 const REFRESH_TOKEN_SECONDS = 2_592_000;
+const HEMIA_DOCS_CLIENT_ID = 'hemia-docs';
 
 @Injectable()
 export class OAuthService {
@@ -42,6 +44,7 @@ export class OAuthService {
     private readonly consentsService: ConsentsService,
     private readonly jwksService: JwksService,
     private readonly jwtService: JwtService,
+    private readonly rolesService: RolesService,
     private readonly sessionsService: SessionsService,
     private readonly usersService: UsersService,
   ) {}
@@ -57,11 +60,9 @@ export class OAuthService {
     }
 
     const scopes = this.parseScopes(query.scope);
-    const hasConsent = await this.consentsService.hasConsent(
-      user.id,
-      client.clientId,
-      scopes,
-    );
+    const hasConsent =
+      !client.requiresConsent ||
+      (await this.consentsService.hasConsent(user.id, client.clientId, scopes));
 
     if (!hasConsent) {
       return this.buildRedirect(query.redirect_uri, {
@@ -128,12 +129,40 @@ export class OAuthService {
       return { active: false };
     }
 
+    if (!token.userId || !token.sessionId) {
+      return {
+        active: true,
+        client_id: token.clientId,
+        scope: token.scope,
+        exp: Math.floor(token.expiresAt.getTime() / 1000),
+      };
+    }
+
+    const claims = await this.buildUserTokenClaims(
+      token.clientId,
+      token.userId,
+      token.sessionId,
+      token.scope,
+    );
+
+    if (!claims) {
+      return { active: false };
+    }
+
     return {
       active: true,
       client_id: token.clientId,
-      sub: token.userId,
       scope: token.scope,
       exp: Math.floor(token.expiresAt.getTime() / 1000),
+      sub: claims.sub,
+      email: claims.email,
+      name: claims.name,
+      tenant_id: claims.tenant_id,
+      organization_id: claims.organization_id,
+      team_id: claims.team_id,
+      session_id: claims.session_id,
+      roles: claims.roles,
+      permissions: claims.permissions,
     };
   }
 
@@ -143,14 +172,29 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid access token');
     }
 
-    const user = await this.usersService.findOne(token.userId);
+    const claims = await this.buildUserTokenClaims(
+      token.clientId,
+      token.userId,
+      token.sessionId,
+      token.scope,
+    );
+
+    if (!claims) {
+      throw new UnauthorizedException('Invalid access token');
+    }
 
     return {
-      sub: user.id,
-      email: user.email,
+      sub: claims.sub,
+      email: claims.email,
       email_verified: true,
-      name: `${user.firstName} ${user.lastName}`.trim(),
-      picture: user.avatarUrl,
+      name: claims.name,
+      picture: claims.picture,
+      tenant_id: claims.tenant_id,
+      organization_id: claims.organization_id,
+      team_id: claims.team_id,
+      session_id: claims.session_id,
+      roles: claims.roles,
+      permissions: claims.permissions,
     };
   }
 
@@ -160,7 +204,6 @@ export class OAuthService {
         'code, redirect_uri and code_verifier are required',
       );
     }
-
     const client = await this.findActiveClient(dto.client_id);
     this.assertGrantAllowed(client, 'authorization_code');
     this.assertRedirectUriAllowed(client, dto.redirect_uri);
@@ -262,7 +305,7 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid refresh token subject');
     }
 
-    const accessToken = this.createOpaqueToken();
+    const accessToken = await this.signAccessToken(client, userId, sessionId, scope);
     const refreshToken = this.createOpaqueToken();
     const expiresAt = new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000);
     await this.tokensRepository.save(
@@ -288,13 +331,13 @@ export class OAuthService {
 
     if (this.parseScopes(scope).includes('openid')) {
       response.id_token = await this.signIdToken(
-        client.clientId,
+        client,
         userId,
+        sessionId,
         scope,
         nonce,
       );
     }
-
     return response;
   }
 
@@ -319,23 +362,38 @@ export class OAuthService {
   }
 
   private async signIdToken(
-    clientId: string,
+    client: OAuthClientEntity,
     userId: string,
+    sessionId: string,
     scope: string,
     nonce?: string | null,
   ) {
-    const user = await this.usersService.findOne(userId);
+    const claims = await this.buildUserTokenClaims(
+      client.clientId,
+      userId,
+      sessionId,
+      scope,
+    );
+
+    if (!claims) {
+      throw new UnauthorizedException('Session is inactive');
+    }
+
     const key = await this.jwksService.getActiveKey();
     const issuer = this.configService.get<string>(
       'app.issuer',
       'https://id.hemia.cloud',
     );
+    const audience =
+      client.clientId === client.audience
+        ? client.clientId
+        : [client.clientId, client.audience];
     const options: JwtSignOptions = {
       algorithm: 'RS256',
       keyid: key.kid,
       issuer,
-      audience: clientId,
-      subject: user.id,
+      audience,
+      subject: claims.sub,
       expiresIn: '15m',
       privateKey: key.privateKey,
     };
@@ -344,13 +402,124 @@ export class OAuthService {
       {
         scope,
         nonce,
-        email: user.email,
+        azp: client.clientId,
+        email: claims.email,
         email_verified: true,
-        name: `${user.firstName} ${user.lastName}`.trim(),
-        picture: user.avatarUrl,
+        name: claims.name,
+        picture: claims.picture,
+        tenant_id: claims.tenant_id,
+        organization_id: claims.organization_id,
+        team_id: claims.team_id,
+        session_id: claims.session_id,
+        roles: claims.roles,
+        permissions: claims.permissions,
       },
       options,
     );
+  }
+
+  private async signAccessToken(
+    client: OAuthClientEntity,
+    userId: string,
+    sessionId: string,
+    scope: string,
+  ) {
+    const claims = await this.buildUserTokenClaims(
+      client.clientId,
+      userId,
+      sessionId,
+      scope,
+    );
+
+    if (!claims) {
+      throw new UnauthorizedException('Session is inactive');
+    }
+
+    if (
+      client.clientId === HEMIA_DOCS_CLIENT_ID &&
+      !this.hasPermission(claims.permissions, 'docs.access')
+    ) {
+      throw new UnauthorizedException('docs.access is required');
+    }
+
+    const key = await this.jwksService.getActiveKey();
+    const issuer = this.configService.get<string>(
+      'app.issuer',
+      'https://id.hemia.cloud',
+    );
+    return this.jwtService.signAsync(
+      {
+        email: claims.email,
+        name: claims.name,
+        picture: claims.picture,
+        tenant_id: claims.tenant_id,
+        organization_id: claims.organization_id,
+        team_id: claims.team_id,
+        session_id: claims.session_id,
+        roles: claims.roles,
+        permissions: claims.permissions,
+        scope,
+      },
+      {
+        algorithm: 'RS256',
+        audience: client.audience,
+        expiresIn: `${ACCESS_TOKEN_SECONDS}s`,
+        issuer,
+        jwtid: randomUUID(),
+        keyid: key.kid,
+        privateKey: key.privateKey,
+        subject: claims.sub,
+      },
+    );
+  }
+
+  private async buildUserTokenClaims(
+    clientId: string,
+    userId: string,
+    sessionId: string | null | undefined,
+    scope: string,
+  ) {
+    if (!sessionId) {
+      return null;
+    }
+
+    const [session, user] = await Promise.all([
+      this.sessionsService.findActive(sessionId),
+      this.usersService.findOne(userId),
+    ]);
+
+    if (!session) {
+      return null;
+    }
+
+    const authenticatedUser: AuthenticatedUser = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      sessionId,
+      tenantId: session.tenantId,
+      organizationId: session.organizationId,
+      teamId: session.teamId,
+    };
+    const [roles, permissions] = await Promise.all([
+      this.rolesService.getEffectiveRoleCodes(authenticatedUser),
+      this.rolesService.getEffectivePermissionCodes(authenticatedUser),
+    ]);
+
+    return {
+      sub: user.id,
+      email: user.email,
+      name: `${user.firstName} ${user.lastName}`.trim(),
+      picture: user.avatarUrl,
+      tenant_id: session.tenantId,
+      organization_id: session.organizationId,
+      team_id: session.teamId,
+      session_id: sessionId,
+      roles,
+      permissions,
+      scope,
+      client_id: clientId,
+    };
   }
 
   private async findActiveClient(clientId: string) {
@@ -446,6 +615,15 @@ export class OAuthService {
       .split(' ')
       .map((item) => item.trim())
       .filter(Boolean);
+  }
+
+  private hasPermission(permissions: string[], permission: string) {
+    const [resource] = permission.split('.');
+    return (
+      permissions.includes(permission) ||
+      permissions.includes(`${resource}.*`) ||
+      permissions.includes('*.*')
+    );
   }
 
   private createOpaqueToken() {
