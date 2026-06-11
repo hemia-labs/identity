@@ -32,6 +32,28 @@ export const envValidationSchema = Joi.object({
   REDIS_PASSWORD: Joi.string().allow('').default(''),
   REDIS_DB: Joi.number().min(0).default(0),
 
+  SMTP_HOST: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
+  SMTP_PORT: Joi.number().port().default(587),
+  SMTP_SECURE: Joi.boolean().truthy('true').falsy('false').default(false),
+  SMTP_USER: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
+  SMTP_PASS: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
+  EMAIL_FROM_APP: Joi.string().default('Hemia ID'),
+  EMAIL_INVITATION_ACCEPT_URL: Joi.string().uri().default(
+    'http://localhost:5173/invitations/accept',
+  ),
+
   JWT_ACCESS_SECRET: Joi.string()
     .min(32)
     .when('NODE_ENV', {

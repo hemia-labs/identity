@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class Migration1781015677663 implements MigrationInterface {
-    name = 'Migration1781015677663'
+export class Migration1781157225546 implements MigrationInterface {
+    name = 'Migration1781157225546'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`CREATE TYPE "public"."users_status_enum" AS ENUM('active', 'inactive', 'pending', 'locked', 'deleted')`);
@@ -63,6 +63,15 @@ export class Migration1781015677663 implements MigrationInterface {
         await queryRunner.query(`CREATE TYPE "public"."jwks_keys_status_enum" AS ENUM('active', 'rotated', 'revoked')`);
         await queryRunner.query(`CREATE TABLE "jwks_keys" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "kid" character varying(80) NOT NULL, "alg" character varying(20) NOT NULL DEFAULT 'RS256', "public_key" text NOT NULL, "private_key_encrypted" text NOT NULL, "status" "public"."jwks_keys_status_enum" NOT NULL DEFAULT 'active', "rotated_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_f34118b5ad5b54a309e5fd0fdd2" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_jwks_keys_kid" ON "jwks_keys" ("kid") `);
+        await queryRunner.query(`CREATE TYPE "public"."invitations_status_enum" AS ENUM('pending', 'accepted', 'cancelled', 'expired')`);
+        await queryRunner.query(`CREATE TABLE "invitations" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "email" character varying(320) NOT NULL, "token_hash" character varying(64) NOT NULL, "tenant_id" uuid NOT NULL, "organization_id" uuid, "team_id" uuid, "status" "public"."invitations_status_enum" NOT NULL DEFAULT 'pending', "invited_by_user_id" uuid, "accepted_by_user_id" uuid, "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, "resent_at" TIMESTAMP WITH TIME ZONE, "accepted_at" TIMESTAMP WITH TIME ZONE, "cancelled_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_5dec98cfdfd562e4ad3648bbb07" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE INDEX "IDX_invitations_email_scope_pending" ON "invitations" ("email", "tenant_id", "organization_id", "team_id", "status") `);
+        await queryRunner.query(`CREATE UNIQUE INDEX "IDX_invitations_token_hash_unique" ON "invitations" ("token_hash") `);
+        await queryRunner.query(`CREATE TYPE "public"."identity_events_type_enum" AS ENUM('user.created', 'user.updated', 'user.suspended', 'user.deleted', 'invitation.accepted', 'team.member.added', 'team.member.removed', 'org.member.added', 'org.member.removed')`);
+        await queryRunner.query(`CREATE TABLE "identity_events" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "type" "public"."identity_events_type_enum" NOT NULL, "tenant_id" uuid, "organization_id" uuid, "team_id" uuid, "user_id" uuid, "payload" jsonb NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_7922f2737a3ca5bbc54b1da0601" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE INDEX "IDX_identity_events_tenant_id" ON "identity_events" ("tenant_id") `);
+        await queryRunner.query(`CREATE INDEX "IDX_identity_events_created_at" ON "identity_events" ("created_at") `);
+        await queryRunner.query(`CREATE INDEX "IDX_identity_events_type" ON "identity_events" ("type") `);
         await queryRunner.query(`CREATE TYPE "public"."external_accounts_provider_enum" AS ENUM('google')`);
         await queryRunner.query(`CREATE TABLE "external_accounts" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "user_id" uuid NOT NULL, "provider" "public"."external_accounts_provider_enum" NOT NULL, "provider_account_id" character varying(255) NOT NULL, "email" character varying(320) NOT NULL, "email_verified" boolean NOT NULL DEFAULT false, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_48de4cf673dd62798b19df4f7bd" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE INDEX "IDX_external_accounts_user_id" ON "external_accounts" ("user_id") `);
@@ -93,11 +102,21 @@ export class Migration1781015677663 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "memberships" ADD CONSTRAINT "FK_a9c14741084d57ac0ec0cb52af3" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "memberships" ADD CONSTRAINT "FK_e5380c394ec7912046d07b54290" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "memberships" ADD CONSTRAINT "FK_fa64f8ee48374ce2c910c7901f3" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "invitations" ADD CONSTRAINT "FK_290e75d606ba89eb421b8b5ec49" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "invitations" ADD CONSTRAINT "FK_42d1dbb4d85dc3643fdc6560af0" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "invitations" ADD CONSTRAINT "FK_67a78e8571040a0deb60ee6c319" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "invitations" ADD CONSTRAINT "FK_e686620e08c4661e70a6b39b94a" FOREIGN KEY ("invited_by_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "invitations" ADD CONSTRAINT "FK_8f29b080d4120512e9f99f2dbb1" FOREIGN KEY ("accepted_by_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "external_accounts" ADD CONSTRAINT "FK_50528d2b5b07136b36ed2954247" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE NO ACTION`);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`ALTER TABLE "external_accounts" DROP CONSTRAINT "FK_50528d2b5b07136b36ed2954247"`);
+        await queryRunner.query(`ALTER TABLE "invitations" DROP CONSTRAINT "FK_8f29b080d4120512e9f99f2dbb1"`);
+        await queryRunner.query(`ALTER TABLE "invitations" DROP CONSTRAINT "FK_e686620e08c4661e70a6b39b94a"`);
+        await queryRunner.query(`ALTER TABLE "invitations" DROP CONSTRAINT "FK_67a78e8571040a0deb60ee6c319"`);
+        await queryRunner.query(`ALTER TABLE "invitations" DROP CONSTRAINT "FK_42d1dbb4d85dc3643fdc6560af0"`);
+        await queryRunner.query(`ALTER TABLE "invitations" DROP CONSTRAINT "FK_290e75d606ba89eb421b8b5ec49"`);
         await queryRunner.query(`ALTER TABLE "memberships" DROP CONSTRAINT "FK_fa64f8ee48374ce2c910c7901f3"`);
         await queryRunner.query(`ALTER TABLE "memberships" DROP CONSTRAINT "FK_e5380c394ec7912046d07b54290"`);
         await queryRunner.query(`ALTER TABLE "memberships" DROP CONSTRAINT "FK_a9c14741084d57ac0ec0cb52af3"`);
@@ -128,6 +147,15 @@ export class Migration1781015677663 implements MigrationInterface {
         await queryRunner.query(`DROP INDEX "public"."IDX_external_accounts_user_id"`);
         await queryRunner.query(`DROP TABLE "external_accounts"`);
         await queryRunner.query(`DROP TYPE "public"."external_accounts_provider_enum"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_identity_events_type"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_identity_events_created_at"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_identity_events_tenant_id"`);
+        await queryRunner.query(`DROP TABLE "identity_events"`);
+        await queryRunner.query(`DROP TYPE "public"."identity_events_type_enum"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_invitations_token_hash_unique"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_invitations_email_scope_pending"`);
+        await queryRunner.query(`DROP TABLE "invitations"`);
+        await queryRunner.query(`DROP TYPE "public"."invitations_status_enum"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_jwks_keys_kid"`);
         await queryRunner.query(`DROP TABLE "jwks_keys"`);
         await queryRunner.query(`DROP TYPE "public"."jwks_keys_status_enum"`);

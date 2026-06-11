@@ -1,0 +1,13 @@
+import { registerAs } from '@nestjs/config';
+
+export default registerAs('email', () => ({
+  host: process.env.SMTP_HOST ?? '',
+  port: Number(process.env.SMTP_PORT ?? 587),
+  secure: process.env.SMTP_SECURE === 'true',
+  user: process.env.SMTP_USER ?? '',
+  pass: process.env.SMTP_PASS ?? '',
+  app: process.env.EMAIL_FROM_APP ?? 'Hemia ID',
+  invitationAcceptUrl:
+    process.env.EMAIL_INVITATION_ACCEPT_URL ??
+    `${process.env.ID_FRONTEND_URL ?? 'http://localhost:5173'}/invitations/accept`,
+}));
