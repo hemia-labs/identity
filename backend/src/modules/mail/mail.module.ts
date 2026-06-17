@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EMAIL_SENDER_CLIENT } from './mail.constants';
 import { MailService } from './mail.service';
+import { MailTemplateManager } from './mail-template.manager';
 
 @Module({
   imports: [ConfigModule],
@@ -19,7 +20,7 @@ import { MailService } from './mail.service';
             user: configService.getOrThrow<string>('email.user'),
             pass: configService.getOrThrow<string>('email.pass'),
           },
-        }),
+        }, MailTemplateManager),
     },
     MailService,
   ],

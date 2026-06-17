@@ -840,6 +840,7 @@ Autenticacion:
 - El cliente OAuth debe tener scopes/permisos explicitos:
   - `identity.users.read`
   - `identity.memberships.read`
+  - `identity.teams.read`
   - `identity.invitations.write`
   - `identity.events.read`
 
@@ -849,6 +850,8 @@ Endpoints:
 GET  /api/v1/external/users/by-email?email=user@example.com
 GET  /api/v1/external/users/by-sub/:sub
 GET  /api/v1/external/users/:sub/memberships
+GET  /api/v1/external/teams?tenantId=&organizationId=
+GET  /api/v1/external/teams/:id?tenantId=
 POST /api/v1/external/invitations
 POST /api/v1/external/invitations/:id/resend
 POST /api/v1/external/invitations/:id/cancel
@@ -894,14 +897,29 @@ Content-Type: application/json
     "app": "Hemia Docs",
     "actorName": "Cristian",
     "actorEmail": "cristian@example.com",
-    "action": "document.shared",
+    "action": "workspace.member_invited",
     "actionLabel": "te invito a colaborar",
-    "resourceName": "Manual de onboarding"
+    "resourceName": "Workspace de Producto"
   }
 }
 ```
 
-`emailContext` es opcional. Si se envia, alimenta el template del correo de invitacion para indicar desde que sistema viene, quien invita y que accion origino la invitacion. Si se omite, el correo usa `EMAIL_FROM_APP` y texto generico.
+Identity provee automaticamente para el template:
+
+- `inviteeEmail`: correo invitado.
+- `tenantId`, `organizationId`, `teamId`: scope de la invitacion.
+- `acceptUrl`: liga publica con token para aceptar.
+- `expiresAt`: fecha de expiracion formateada.
+- `actorLabel`: nombre/correo calculado para mostrar quien invita.
+
+External API debe enviar `emailContext` con:
+
+- `app`: sistema origen mostrado en el correo, por ejemplo `Hemia Docs`.
+- `actorName`: persona, servicio o sistema que origina la accion.
+- `actorEmail`: opcional, correo del actor si existe.
+- `action`: codigo estable para auditoria/plantillas, por ejemplo `workspace.member_invited`.
+- `actionLabel`: texto humano de accion, por ejemplo `te invito a colaborar`.
+- `resourceName`: nombre visible del recurso, por ejemplo el workspace.
 
 La aceptacion de invitacion es publica porque normalmente llega desde email/callback:
 

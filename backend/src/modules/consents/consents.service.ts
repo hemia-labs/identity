@@ -28,8 +28,13 @@ export class ConsentsService {
     return scopes.every((scope) => consent.scopes.includes(scope));
   }
 
-  async getOAuthRequest(returnTo: string) {
+  async getOAuthRequest(userId: string, returnTo: string) {
     const request = await this.parseOAuthReturnTo(returnTo);
+    const approved = await this.hasConsent(
+      userId,
+      request.client.clientId,
+      request.scopes,
+    );
 
     return {
       clientId: request.client.clientId,
@@ -42,6 +47,7 @@ export class ConsentsService {
       })),
       state: request.state,
       returnTo,
+      approved,
     };
   }
 

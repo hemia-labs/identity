@@ -9,8 +9,6 @@ import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { RefreshTokensService } from '../refresh-tokens/refresh-tokens.service';
 import { SessionsService } from '../sessions/sessions.service';
-import { TenantStatus } from '../tenants/entities/tenant.entity';
-import { TenantsService } from '../tenants/tenants.service';
 import { UserEntity, UserStatus } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { ChangePasswordDto } from './dtos/change-password.dto';
@@ -30,7 +28,6 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
-    private readonly tenantsService: TenantsService,
     private readonly sessionsService: SessionsService,
     private readonly refreshTokensService: RefreshTokensService,
   ) {}
@@ -52,13 +49,9 @@ export class AuthService {
 
     this.assertUserCanLogin(user);
 
-    if (dto.tenantId) {
-      const tenant = await this.tenantsService.findOne(dto.tenantId);
-      if (tenant.status === TenantStatus.Suspended) {
-        throw new UnauthorizedException('Tenant is suspended');
-      }
-    }
-
+    // ponytail: tenant context is set via AccountsService.switchAccount, which
+    // validates membership. Login stays tenant-agnostic so it can't bind a
+    // session to a tenant the user isn't a member of.
     const refreshToken = this.createOpaqueToken();
     const refreshTokenHash = this.hashToken(refreshToken);
     const refreshExpiresAt = this.getDateFromDuration(
@@ -66,7 +59,6 @@ export class AuthService {
     );
     const session = await this.sessionsService.create({
       userId: user.id,
-      tenantId: dto.tenantId,
       refreshTokenHash,
       deviceName: dto.deviceName,
       ipAddress: metadata.ipAddress,
@@ -82,14 +74,9 @@ export class AuthService {
     });
 
     return {
-      accessToken: await this.signAccessToken(user, session.id, dto.tenantId),
+      accessToken: await this.signAccessToken(user, session.id),
       refreshToken,
-      session: this.toAuthSession(
-        user,
-        session.id,
-        dto.tenantId,
-        session.expiresAt,
-      ),
+      session: this.toAuthSession(user, session.id, null, session.expiresAt),
     };
   }
 

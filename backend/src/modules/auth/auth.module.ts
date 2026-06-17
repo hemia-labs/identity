@@ -4,7 +4,6 @@ import { PassportModule } from '@nestjs/passport';
 import { ExternalAccountsModule } from '../external-accounts/external-accounts.module';
 import { RefreshTokensModule } from '../refresh-tokens/refresh-tokens.module';
 import { SessionsModule } from '../sessions/sessions.module';
-import { TenantsModule } from '../tenants/tenants.module';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -18,7 +17,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtModule.register({}),
     UsersModule,
     ExternalAccountsModule,
-    TenantsModule,
     SessionsModule,
     RefreshTokensModule,
   ],

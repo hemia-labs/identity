@@ -27,11 +27,6 @@ export const envValidationSchema = Joi.object({
   DB_RETRY_ATTEMPTS: Joi.number().min(0).default(3),
   DB_RETRY_DELAY: Joi.number().min(0).default(3000),
 
-  REDIS_HOST: Joi.string().default('localhost'),
-  REDIS_PORT: Joi.number().port().default(6379),
-  REDIS_PASSWORD: Joi.string().allow('').default(''),
-  REDIS_DB: Joi.number().min(0).default(0),
-
   SMTP_HOST: Joi.string().when('NODE_ENV', {
     is: 'production',
     then: Joi.string().required(),
@@ -83,10 +78,7 @@ export const envValidationSchema = Joi.object({
         .min(32)
         .default('dev_oauth_state_secret_change_me_32_chars'),
     }),
-  JWKS_KEY_KID: Joi.string().default('local-dev-rs256'),
-  JWKS_PRIVATE_KEY_PATH: Joi.string()
-    .allow('')
-    .default('./secrets/jwks-private.pem'),
+  // JWKS_KEY_KID / JWKS_PRIVATE_KEY_PATH are seed-only (app reads the active key from the DB).
   JWKS_PRIVATE_KEY: Joi.string().allow('').default(''),
 
   GOOGLE_CLIENT_ID: Joi.string().when('NODE_ENV', {

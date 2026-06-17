@@ -42,11 +42,12 @@ describe('ConsentsService', () => {
   it('returns a validated OAuth consent request', async () => {
     const { service } = createService();
 
-    await expect(service.getOAuthRequest(returnTo)).resolves.toMatchObject({
+    await expect(service.getOAuthRequest('user-id', returnTo)).resolves.toMatchObject({
       clientId: 'console',
       clientName: 'console',
       redirectUri: 'http://localhost:5173/auth/callback',
       state: 'xyz',
+      approved: false,
       scopes: [
         { key: 'openid', label: 'Openid' },
         { key: 'profile', label: 'Profile' },
@@ -76,6 +77,7 @@ describe('ConsentsService', () => {
 
     await expect(
       service.getOAuthRequest(
+        'user-id',
         '/oauth/authorize?client_id=console&redirect_uri=http%3A%2F%2Fevil.test%2Fcallback&scope=openid',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -86,6 +88,7 @@ describe('ConsentsService', () => {
 
     await expect(
       service.getOAuthRequest(
+        'user-id',
         '/oauth/authorize?client_id=console&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback&scope=admin',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);

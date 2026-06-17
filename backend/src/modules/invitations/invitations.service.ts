@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   BadRequestException,
   Injectable,
@@ -23,28 +25,10 @@ import {
 } from './entities/invitation.entity';
 
 const INVITATION_DAYS = 7;
-const INVITATION_EMAIL_TEMPLATE = `
-<mjml>
-  <mj-body background-color="#f6f8fb">
-    <mj-section background-color="#ffffff" padding="32px 24px">
-      <mj-column>
-        <mj-text font-size="20px" font-weight="700" color="#111827">
-          Invitacion a <%= app %>
-        </mj-text>
-        <mj-text font-size="15px" line-height="24px" color="#374151">
-          <%= actorLabel %> <%= actionLabel %><% if (resourceName) { %> en <strong><%= resourceName %></strong><% } %>.
-        </mj-text>
-        <mj-button background-color="#111827" color="#ffffff" href="<%= acceptUrl %>" font-size="14px">
-          Aceptar invitacion
-        </mj-button>
-        <mj-text font-size="13px" line-height="20px" color="#6b7280">
-          Este enlace expira el <%= expiresAt %>. Si no esperabas esta invitacion, puedes ignorar este correo.
-        </mj-text>
-      </mj-column>
-    </mj-section>
-  </mj-body>
-</mjml>
-`;
+const INVITATION_EMAIL_TEMPLATE = readFileSync(
+  join(__dirname, '../mail/templates/invitation.mjml'),
+  'utf8',
+);
 
 type InvitationEmailContext = {
   app?: string;

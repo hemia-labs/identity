@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsDefined,
   IsEmail,
   IsObject,
   IsOptional,
@@ -23,43 +24,43 @@ export class CreateInvitationDto {
 }
 
 export class InvitationEmailContextDto {
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @MaxLength(120)
-  app?: string;
+  app: string;
 
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @MaxLength(160)
-  actorName?: string;
+  actorName: string;
 
   @IsOptional()
   @IsEmail()
   actorEmail?: string;
 
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @MaxLength(80)
-  action?: string;
+  action: string;
 
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @MaxLength(200)
-  actionLabel?: string;
+  actionLabel: string;
 
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @MaxLength(160)
-  resourceName?: string;
+  resourceName: string;
 }
 
 export class ExternalCreateInvitationDto extends CreateInvitationDto {
   @IsUUID()
   tenantId: string;
 
-  @IsOptional()
+  @IsDefined()
   @IsObject()
   @ValidateNested()
   @Type(() => InvitationEmailContextDto)
-  emailContext?: InvitationEmailContextDto;
+  emailContext: InvitationEmailContextDto;
 }

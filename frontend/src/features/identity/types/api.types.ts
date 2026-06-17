@@ -35,6 +35,7 @@ export type OAuthConsentRequest = {
   scopes: OAuthConsentScope[]
   state?: string | null
   returnTo: string
+  approved: boolean
 }
 
 export type ApproveOAuthConsentResponse = {

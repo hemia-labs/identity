@@ -207,6 +207,7 @@ export class OAuthService {
     const client = await this.findActiveClient(dto.client_id);
     this.assertGrantAllowed(client, 'authorization_code');
     this.assertRedirectUriAllowed(client, dto.redirect_uri);
+    await this.assertClientAuth(client, dto.client_secret);
 
     const code = await this.codesRepository.findOne({
       where: {
@@ -249,6 +250,7 @@ export class OAuthService {
 
     const client = await this.findActiveClient(dto.client_id);
     this.assertGrantAllowed(client, 'refresh_token');
+    await this.assertClientAuth(client, dto.client_secret);
     const refreshHash = this.hashToken(dto.refresh_token);
     const previousToken = await this.tokensRepository.findOne({
       where: { refreshTokenHash: refreshHash, clientId: client.clientId },
@@ -544,6 +546,13 @@ export class OAuthService {
     }
 
     return storedToken;
+  }
+
+  private async assertClientAuth(client: OAuthClientEntity, secret?: string) {
+    // Public clients authenticate with PKCE; confidential clients must prove the secret.
+    if (client.type === OAuthClientType.Confidential) {
+      await this.assertClientSecret(client, secret);
+    }
   }
 
   private async assertClientSecret(client: OAuthClientEntity, secret?: string) {

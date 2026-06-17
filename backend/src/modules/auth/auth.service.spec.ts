@@ -4,7 +4,6 @@ import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { RefreshTokensService } from '../refresh-tokens/refresh-tokens.service';
 import { SessionsService } from '../sessions/sessions.service';
-import { TenantsService } from '../tenants/tenants.service';
 import { UserEntity, UserStatus } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
@@ -32,9 +31,6 @@ const createService = (user: Partial<UserEntity> | null) => {
   const usersService = {
     findByIdentifier: jest.fn().mockResolvedValue(user),
   } as unknown as UsersService;
-  const tenantsService = {
-    findOne: jest.fn(),
-  } as unknown as TenantsService;
   const sessionsService = {
     create: jest.fn().mockResolvedValue({
       id: 'session-id',
@@ -50,7 +46,6 @@ const createService = (user: Partial<UserEntity> | null) => {
     configService,
     jwtService,
     usersService,
-    tenantsService,
     sessionsService,
     refreshTokensService,
   );

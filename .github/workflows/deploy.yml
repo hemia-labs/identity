@@ -1,0 +1,60 @@
+name: Build and deploy Hemia Identity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - frontend/**
+      - docker-compose.yml
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Upload files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # backend/.env is gitignored, so it isn't uploaded — it's written from the secret below.
+          source: "backend,frontend,docker-compose.yml"
+          target: ${{ secrets.APP_PATH }}
+
+      - name: Build and restart Docker Compose
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd "${{ secrets.APP_PATH }}"
+            # Whole prod .env lives in one secret. Quoted heredoc keeps $ in values literal.
+            cat > backend/.env <<'HEMIA_ENV_EOF'
+            ${{ secrets.BACKEND_ENV }}
+            HEMIA_ENV_EOF
+            docker compose pull || true
+            docker compose up -d --build --remove-orphans
+            docker image prune -f
+            docker compose ps

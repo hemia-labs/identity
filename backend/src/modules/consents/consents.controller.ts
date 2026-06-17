@@ -12,8 +12,11 @@ export class ConsentsController {
   constructor(private readonly consentsService: ConsentsService) {}
 
   @Get('request')
-  getOAuthRequest(@Query() query: OAuthConsentRequestQueryDto) {
-    return this.consentsService.getOAuthRequest(query.returnTo);
+  getOAuthRequest(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OAuthConsentRequestQueryDto,
+  ) {
+    return this.consentsService.getOAuthRequest(user.id, query.returnTo);
   }
 
   @Post('approve')

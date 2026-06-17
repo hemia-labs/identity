@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Check, X } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SelectionLayout from '@/app/layouts/SelectionLayout.vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -20,6 +20,15 @@ const router = useRouter()
 const returnTo = computed(() => typeof route.query.returnTo === 'string' ? route.query.returnTo : null)
 const consentQuery = useOAuthConsentQuery(() => returnTo.value)
 const approveMutation = useApproveOAuthConsentMutation()
+
+watch(
+  () => consentQuery.data.value,
+  (request) => {
+    if (request?.approved) {
+      window.location.assign(resolveBackendUrl(request.returnTo))
+    }
+  },
+)
 
 async function approve() {
   if (!returnTo.value) {
@@ -55,7 +64,7 @@ function cancel() {
     <Alert v-else-if="consentQuery.error.value || approveMutation.error.value" variant="destructive" class="max-w-4xl">
       <AlertDescription>{{ getErrorMessage(consentQuery.error.value ?? approveMutation.error.value) }}</AlertDescription>
     </Alert>
-    <Skeleton v-if="consentQuery.isLoading.value" class="h-[380px] w-full max-w-4xl rounded-md" />
+    <Skeleton v-if="consentQuery.isLoading.value || consentQuery.data.value?.approved" class="h-[380px] w-full max-w-4xl rounded-md" />
     <Card v-else-if="consentQuery.data.value" class="max-w-4xl rounded-md border-[#d5e0f4] bg-white/92 shadow-[0_18px_55px_rgba(20,21,111,0.1)]">
       <CardHeader class="p-4 pb-2 sm:p-6 sm:pb-3">
         <div class="flex flex-wrap items-start justify-between gap-3">

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, MoreThan, Repository } from 'typeorm';
 import { SessionEntity } from './entities/session.entity';
 
 type CreateSessionInput = {
@@ -39,6 +39,7 @@ export class SessionsService {
         id,
         isActive: true,
         revokedAt: IsNull(),
+        expiresAt: MoreThan(new Date()),
       },
     });
   }

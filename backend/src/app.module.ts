@@ -6,7 +6,6 @@ import databaseConfig from './config/database.config';
 import emailConfig from './config/email.config';
 import { envValidationSchema } from './config/env.validation';
 import jwtConfig from './config/jwt.config';
-import redisConfig from './config/redis.config';
 import { DatabaseModule } from './database/database.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -43,7 +42,6 @@ import { UsersModule } from './modules/users/users.module';
         databaseConfig,
         emailConfig,
         jwtConfig,
-        redisConfig,
       ],
       validationSchema: envValidationSchema,
       validationOptions: {

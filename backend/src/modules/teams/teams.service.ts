@@ -29,6 +29,16 @@ export class TeamsService {
     });
   }
 
+  findExternal(input: { tenantId: string; organizationId?: string }) {
+    return this.teamsRepository.find({
+      where: {
+        tenantId: input.tenantId,
+        ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+      },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async findOne(id: string, tenantId?: string) {
     const team = await this.teamsRepository.findOne({
       where: { id, ...(tenantId ? { tenantId } : {}) },

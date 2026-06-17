@@ -1,31 +1,27 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: hemia-id-postgres
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    container_name: hemia-id-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
     ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: hemia
-      POSTGRES_PASSWORD: hemia
-      POSTGRES_DB: hemia_id
-    volumes:
-      - hemia_id_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hemia -d hemia_id"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - "4000:4000"
+    # Postgres and Redis run on the host, outside Docker. host.docker.internal resolves to the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-  redis:
-    image: redis:7-alpine
-    container_name: hemia-id-redis
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        VITE_API_BASE_URL: /api/v1
+    container_name: hemia-id-frontend
+    restart: unless-stopped
     ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-volumes:
-  hemia_id_postgres_data:
+      - "5173:80"
+    depends_on:
+      - backend

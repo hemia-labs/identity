@@ -2,14 +2,21 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { IdentityEventsService } from '../identity-events/identity-events.service';
 import { MembershipEntity } from '../memberships/entities/membership.entity';
 import { MembershipsService } from '../memberships/memberships.service';
+import { TeamEntity } from '../teams/entities/team.entity';
+import { TeamsService } from '../teams/teams.service';
 import { UsersService } from '../users/users.service';
 import { ExternalEventsQueryDto } from './dtos/external-events-query.dto';
+import {
+  ExternalTeamQueryDto,
+  ExternalTeamsQueryDto,
+} from './dtos/external-teams-query.dto';
 
 @Injectable()
 export class ExternalApiService {
   constructor(
     private readonly identityEventsService: IdentityEventsService,
     private readonly membershipsService: MembershipsService,
+    private readonly teamsService: TeamsService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -30,6 +37,16 @@ export class ExternalApiService {
     await this.usersService.findBySub(sub);
     const memberships = await this.membershipsService.findExternalByUser(sub);
     return memberships.map((membership) => this.toExternalMembership(membership));
+  }
+
+  async findTeams(query: ExternalTeamsQueryDto) {
+    const teams = await this.teamsService.findExternal(query);
+    return teams.map((team) => this.toExternalTeam(team));
+  }
+
+  async findTeamById(id: string, query: ExternalTeamQueryDto) {
+    const team = await this.teamsService.findOne(id, query.tenantId);
+    return this.toExternalTeam(team);
   }
 
   findEvents(query: ExternalEventsQueryDto) {
@@ -74,6 +91,19 @@ export class ExternalApiService {
       createdAt: membership.createdAt,
       updatedAt: membership.updatedAt,
       deletedAt: membership.deletedAt,
+    };
+  }
+
+  private toExternalTeam(team: TeamEntity) {
+    return {
+      id: team.id,
+      tenantId: team.tenantId,
+      organizationId: team.organizationId,
+      name: team.name,
+      slug: team.slug,
+      description: team.description,
+      createdAt: team.createdAt,
+      updatedAt: team.updatedAt,
     };
   }
 }

@@ -8,7 +8,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { FormControl, FormField, FormItem, FormLabel, FormMessage, Form } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
 import { loginSchema } from '@/features/auth/schemas/auth.schemas'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { useLoginMutation } from '@/features/identity/composables/useIdentityApi'
@@ -83,17 +82,6 @@ async function submit(values: GenericObject) {
     <Button class="h-12 w-full bg-[#2568ff] text-base font-bold shadow-[0_14px_28px_rgba(37,104,255,0.28)] hover:bg-[#1558ef]" type="submit" :disabled="isSubmitting || loginMutation.isPending.value">
       <Loader2 v-if="isSubmitting || loginMutation.isPending.value" class="mr-2 h-4 w-4 animate-spin" />
       Continuar
-    </Button>
-
-    <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-5">
-      <Separator class="bg-[#cfd9ec]" />
-      <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[#edf3ff] text-xs font-bold text-[#2568ff]">o</span>
-      <Separator class="bg-[#cfd9ec]" />
-    </div>
-
-    <Button class="h-12 w-full border-[#2568ff] bg-white text-base font-bold text-[#0f5cff] hover:bg-[#f4f7ff]" type="button" variant="outline">
-      <Building2 class="mr-3 h-6 w-6" />
-      Continuar con SSO corporativo
     </Button>
 
     <div class="rounded-md border border-[#dce6f8] bg-[#f7fbff] p-4">

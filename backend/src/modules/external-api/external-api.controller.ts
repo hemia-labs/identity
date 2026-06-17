@@ -11,6 +11,10 @@ import { ExternalCreateInvitationDto } from '../invitations/dtos/create-invitati
 import { InvitationsService } from '../invitations/invitations.service';
 import { ExternalScopes } from './decorators/external-scopes.decorator';
 import { ExternalEventsQueryDto } from './dtos/external-events-query.dto';
+import {
+  ExternalTeamQueryDto,
+  ExternalTeamsQueryDto,
+} from './dtos/external-teams-query.dto';
 import { ExternalApiService } from './external-api.service';
 import { OAuthBearerGuard } from './guards/oauth-bearer.guard';
 
@@ -38,6 +42,18 @@ export class ExternalApiController {
   @ExternalScopes('identity.memberships.read')
   findMembershipsBySub(@Param('sub') sub: string) {
     return this.externalApiService.findMembershipsBySub(sub);
+  }
+
+  @Get('teams')
+  @ExternalScopes('identity.teams.read')
+  findTeams(@Query() query: ExternalTeamsQueryDto) {
+    return this.externalApiService.findTeams(query);
+  }
+
+  @Get('teams/:id')
+  @ExternalScopes('identity.teams.read')
+  findTeamById(@Param('id') id: string, @Query() query: ExternalTeamQueryDto) {
+    return this.externalApiService.findTeamById(id, query);
   }
 
   @Post('invitations')

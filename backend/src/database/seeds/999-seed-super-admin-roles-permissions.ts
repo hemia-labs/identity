@@ -262,37 +262,89 @@ async function seedTeam(
   tenantId: string,
   organizationId: string,
 ) {
+  const seedTeams = [
+    {
+      name: 'Producto e Ingeniería',
+      slug: 'producto-ingenieria',
+      description: 'Producto, ingeniería y entrega técnica',
+    },
+    {
+      name: 'Calidad y Soporte',
+      slug: 'calidad-soporte',
+      description: 'Aseguramiento de calidad y soporte operativo',
+    },
+    {
+      name: 'Comercial y de Crecimiento',
+      slug: 'comercial-crecimiento',
+      description: 'Ventas, crecimiento e ingresos',
+    },
+  ];
+
+  await queryRunner.query(
+    `
+      UPDATE "teams"
+      SET
+        "deleted_at" = now(),
+        "updated_at" = now()
+      WHERE "tenant_id" = $1
+        AND "organization_id" = $2
+        AND "slug" = $3
+        AND "deleted_at" IS NULL
+    `,
+    [tenantId, organizationId, 'docs'],
+  );
+
   const teams = await queryRunner.query(
     `
-      INSERT INTO "teams" (
-        "tenant_id",
-        "organization_id",
-        "name",
-        "slug",
-        "description"
+      WITH seed_teams ("name", "slug", "description") AS (
+        SELECT "name", "slug", "description"
+        FROM jsonb_to_recordset($3::jsonb) AS team(
+          "name" text,
+          "slug" text,
+          "description" text
+        )
+      ),
+      upserted_teams AS (
+        INSERT INTO "teams" (
+          "tenant_id",
+          "organization_id",
+          "name",
+          "slug",
+          "description"
+        )
+        SELECT $1, $2, "name", "slug", "description"
+        FROM seed_teams
+        ON CONFLICT ("tenant_id", "organization_id", "slug")
+          WHERE "deleted_at" IS NULL
+        DO UPDATE
+        SET
+          "name" = EXCLUDED."name",
+          "description" = EXCLUDED."description",
+          "updated_at" = now()
+        RETURNING "id", "slug"
       )
-      VALUES ($1, $2, 'Docs', 'docs', 'Local Hemia Docs team')
-      ON CONFLICT ("tenant_id", "organization_id", "slug")
-        WHERE "deleted_at" IS NULL
-      DO UPDATE
-      SET
-        "name" = EXCLUDED."name",
-        "description" = EXCLUDED."description",
-        "updated_at" = now()
-      RETURNING "id"
+      SELECT "id"
+      FROM upserted_teams
+      WHERE "slug" = $4
     `,
-    [tenantId, organizationId],
+    [tenantId, organizationId, JSON.stringify(seedTeams), seedTeams[0].slug],
   );
 
   return teams[0].id as string;
 }
 
 async function seedOAuthClient(queryRunner: QueryRunner) {
+  const clientSecret = 'dummy_identity_service_client_secret';
+  const clientSecretHash = await argon2.hash(clientSecret, {
+    type: argon2.argon2id,
+  });
+
   await queryRunner.query(
     `
       INSERT INTO "oauth_clients" (
         "client_id",
         "audience",
+        "client_secret_hash",
         "type",
         "redirect_uris",
         "grant_types",
@@ -304,9 +356,10 @@ async function seedOAuthClient(queryRunner: QueryRunner) {
       VALUES (
         'hemia-docs',
         'hemia-docs-api',
-        'public',
+        $1,
+        'confidential',
         ARRAY['http://localhost:3001/auth/callback'],
-        ARRAY['authorization_code', 'refresh_token'],
+        ARRAY['authorization_code', 'refresh_token', 'client_credentials'],
         ARRAY['code'],
         ARRAY[
           'openid',
@@ -314,7 +367,12 @@ async function seedOAuthClient(queryRunner: QueryRunner) {
           'email',
           'offline_access',
           'docs.access',
-          'docs.*'
+          'docs.*',
+          'identity.users.read',
+          'identity.memberships.read',
+          'identity.teams.read',
+          'identity.invitations.write',
+          'identity.events.read'
         ],
         false,
         'active'
@@ -323,6 +381,7 @@ async function seedOAuthClient(queryRunner: QueryRunner) {
       SET
         "type" = EXCLUDED."type",
         "audience" = EXCLUDED."audience",
+        "client_secret_hash" = EXCLUDED."client_secret_hash",
         "redirect_uris" = EXCLUDED."redirect_uris",
         "grant_types" = EXCLUDED."grant_types",
         "response_types" = EXCLUDED."response_types",
@@ -331,6 +390,7 @@ async function seedOAuthClient(queryRunner: QueryRunner) {
         "status" = 'active',
         "updated_at" = now()
     `,
+    [clientSecretHash],
   );
 }
 

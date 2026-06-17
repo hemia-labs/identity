@@ -14,9 +14,4 @@ export class HealthController {
   getDatabaseHealth() {
     return this.healthService.getDatabaseHealth();
   }
-
-  @Get('redis')
-  getRedisHealth() {
-    return this.healthService.getRedisHealth();
-  }
 }
