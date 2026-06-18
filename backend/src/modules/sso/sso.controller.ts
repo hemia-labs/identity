@@ -39,10 +39,8 @@ export class SsoController {
     const user = (request as AuthenticatedRequest).user;
 
     if (!user) {
-      const frontendUrl = this.configService.get<string>(
-        'app.frontendUrl',
-        'http://localhost:5173',
-      );
+      const frontendUrl =
+        this.configService.getOrThrow<string>('app.frontendUrl');
       return response.redirect(
         `${frontendUrl}${this.ssoService.buildLoginRedirect(request.originalUrl)}`,
       );

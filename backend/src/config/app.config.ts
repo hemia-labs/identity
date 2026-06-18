@@ -11,5 +11,5 @@ export default registerAs('app', () => ({
   port: Number(process.env.PORT ?? 3000),
   corsOrigins: parseOrigins(process.env.APP_CORS_ORIGINS),
   issuer: process.env.APP_ISSUER ?? 'https://id.hemia.cloud',
-  frontendUrl: process.env.ID_FRONTEND_URL ?? 'http://localhost:5173',
+  frontendUrl: process.env.ID_FRONTEND_URL,
 }));

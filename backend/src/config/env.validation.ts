@@ -12,7 +12,7 @@ export const envValidationSchema = Joi.object({
     .allow('')
     .default('http://localhost:5173,http://localhost:3001'),
   APP_ISSUER: Joi.string().uri().default('https://id.hemia.cloud'),
-  ID_FRONTEND_URL: Joi.string().uri().default('http://localhost:5173'),
+  ID_FRONTEND_URL: Joi.string().uri().required(),
   AUTH_ALLOWED_REDIRECT_URIS: Joi.string()
     .allow('')
     .default('http://localhost:5173/auth/callback'),

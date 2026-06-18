@@ -1,5 +1,13 @@
 import { registerAs } from '@nestjs/config';
 
+const requireEnv = (name: string) => {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+};
+
 export default registerAs('email', () => ({
   host: process.env.SMTP_HOST ?? '',
   port: Number(process.env.SMTP_PORT ?? 587),
@@ -9,5 +17,5 @@ export default registerAs('email', () => ({
   app: process.env.EMAIL_FROM_APP ?? 'Hemia ID',
   invitationAcceptUrl:
     process.env.EMAIL_INVITATION_ACCEPT_URL ??
-    `${process.env.ID_FRONTEND_URL ?? 'http://localhost:5173'}/invitations/accept`,
+    `${requireEnv('ID_FRONTEND_URL')}/invitations/accept`,
 }));
