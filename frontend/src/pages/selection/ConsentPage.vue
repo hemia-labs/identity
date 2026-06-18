@@ -46,7 +46,7 @@ function cancel() {
     return
   }
 
-  const redirectUrl = new URL(request.redirectUri)
+  const redirectUrl = new URL(resolveBackendUrl(request.redirectUri))
   redirectUrl.searchParams.set('error', 'access_denied')
   if (request.state) {
     redirectUrl.searchParams.set('state', request.state)
