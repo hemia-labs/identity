@@ -20,6 +20,7 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
 import { ConsentsModule } from './modules/consents/consents.module';
 import { JwksModule } from './modules/jwks/jwks.module';
 import { OAuthModule } from './modules/oauth/oauth.module';
+import { OAuthClientsModule } from './modules/oauth-clients/oauth-clients.module';
 import { OidcModule } from './modules/oidc/oidc.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { RefreshTokensModule } from './modules/refresh-tokens/refresh-tokens.module';
@@ -72,6 +73,7 @@ import { UsersModule } from './modules/users/users.module';
     ConsentsModule,
     JwksModule,
     OAuthModule,
+    OAuthClientsModule,
     OidcModule,
   ],
 })

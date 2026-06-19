@@ -4,7 +4,8 @@
   "packageManager": "bun@1.3.14",
   "workspaces": [
     "frontend",
-    "backend"
+    "backend",
+    "packages/*"
   ],
   "scripts": {
     "dev:frontend": "bun --cwd frontend dev",
