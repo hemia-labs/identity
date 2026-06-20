@@ -122,18 +122,48 @@ import type { SsoConfig } from '@hemia/auth';
 export class AppModule {}
 ```
 
-### 2. Activar guard + filtro globales
+### 2. Bootstrap obligatorio (main.ts)
+
+Dos líneas imprescindibles, independientes de cómo apliques el guard:
 
 ```ts
-import { SsoAuthGuard, SsoExceptionFilter } from '@hemia/auth/nestjs';
+import { SsoExceptionFilter } from '@hemia/auth/nestjs';
 import cookieParser from 'cookie-parser';
 
-app.use(cookieParser());                          // el guard lee req.cookies
-app.useGlobalGuards(app.get(SsoAuthGuard));       // todo protegido salvo @Public()
-app.useGlobalFilters(new SsoExceptionFilter());
+app.use(cookieParser());                          // el guard lee req.cookies[cookieName]
+app.useGlobalFilters(new SsoExceptionFilter());   // UnauthorizedError → 401, ConfigError → 500
 ```
 
-### 3. Usar en cualquier controller
+Sin `cookieParser` el guard no ve la cookie de sesión; sin el filtro, los errores del
+core salen como 500 genérico.
+
+### 3. Proteger rutas con el guard
+
+`SsoModule` es global, así que `SsoAuthGuard` (y `SSO_CONFIG`, del que depende) están
+disponibles en toda la app. Dos modos:
+
+**a) Por ruta/controlador** — explícito, granular:
+
+```ts
+import { Public, CurrentUser, SsoAuthGuard } from '@hemia/auth/nestjs';
+import type { AuthenticatedUser } from '@hemia/auth';
+
+@Controller('me')
+export class MeController {
+  @Get()
+  @UseGuards(SsoAuthGuard)
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return user;
+  }
+}
+```
+
+**b) Global** — protege todo, y eximís endpoints con `@Public()`:
+
+```ts
+// en main.ts, junto al bootstrap de arriba
+app.useGlobalGuards(app.get(SsoAuthGuard));       // o un provider APP_GUARD
+```
 
 ```ts
 import { Public, CurrentUser } from '@hemia/auth/nestjs';

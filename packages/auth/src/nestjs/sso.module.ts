@@ -52,7 +52,7 @@ export class SsoModule {
         },
         SsoAuthGuard,
       ],
-      exports: [SsoCore, SsoClient, SsoAuthGuard],
+      exports: [SsoCore, SsoClient, SsoAuthGuard, SSO_CONFIG],
     };
   }
 }

@@ -1,14 +1,9 @@
 {
   "name": "@hemia/auth",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Cliente reutilizable de SSO OAuth/OIDC de Hemia: core en TS puro + adapter NestJS.",
   "license": "MIT",
   "author": "Hemia",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/hemia/identity.git",
-    "directory": "packages/auth"
-  },
   "keywords": ["sso", "oauth", "oidc", "pkce", "jwks", "nestjs", "auth"],
   "main": "./dist/core/index.js",
   "exports": {
