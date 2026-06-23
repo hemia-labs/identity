@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { SsoCore, type SsoConfig } from '../core/index';
 import { SSO_CONFIG } from './tokens';
-import { IS_PUBLIC_KEY } from './decorators';
+import { IS_PUBLIC_KEY, type RequestAuthContext } from './decorators';
 import type { Request } from 'express';
 
 /**
@@ -32,11 +32,22 @@ export class SsoAuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const req = ctx
-      .switchToHttp()
-      .getRequest<Request & { user?: unknown; cookies?: Record<string, string> }>();
-    const session = await this.core.getSession(req.cookies?.[this.cfg.cookieName]);
+    const req = ctx.switchToHttp().getRequest<
+      Request & {
+        user?: unknown;
+        ssoAuth?: RequestAuthContext;
+        cookies?: Record<string, string>;
+      }
+    >();
+    const cookie = req.cookies?.[this.cfg.cookieName];
+    // getSession lanza si falta el id; tras él, `cookie` es un string válido.
+    const session = await this.core.getSession(cookie);
     req.user = session.user;
+    req.ssoAuth = {
+      accessToken: session.accessToken,
+      cookie: cookie as string,
+      authorization: `Bearer ${session.accessToken}`,
+    };
     return true;
   }
 }
