@@ -60,6 +60,31 @@ Rutas que monta el module automáticamente:
 
 ---
 
+## Configuración por entorno (env)
+
+`SsoConfig` se arma normalmente desde env (ver `config/sso.config.ts` en la app). Solo
+`SSO_ISSUER` es realmente obligatorio: el resto de las URLs OAuth se derivan de él si no
+las fijás.
+
+| Variable | Default | Para qué |
+|---|---|---|
+| `SSO_ISSUER` | `http://localhost:3000` (o `HEMIA_ID_BASE_URL`) | Base del SSO; de aquí se derivan las demás URLs. |
+| `SSO_CLIENT_ID` | `hemia-console` | Client del login PKCE. |
+| `SSO_CLIENT_SECRET` | — (opcional) | Solo si el client es confidential. |
+| `SSO_AUDIENCE` | `hemia-console` | `aud` esperado en el JWT. |
+| `SSO_JWKS_URL` | `${issuer}/.well-known/jwks.json` | Claves para verificar el JWT. |
+| `SSO_AUTHORIZATION_URL` | `${issuer}/oauth/authorize` | Endpoint de autorización. |
+| `SSO_TOKEN_URL` | `${issuer}/oauth/token` | Intercambio de code/refresh. |
+| `SSO_REVOCATION_URL` | `${issuer}/oauth/revoke` | Revocación en logout. |
+| `SSO_LOGOUT_URL` | `${issuer}/oauth/logout` | Logout en el IdP. |
+| `SSO_REDIRECT_URI` | `http://localhost:3001/auth/callback` | Debe coincidir con el registrado en el SSO. |
+| `SSO_FRONTEND_URL` | `http://localhost:3000` | A dónde vuelve tras el callback. |
+| `SSO_SCOPE` | `openid profile email offline_access` | Scopes del login. |
+| `REDIS_*` | — | Conexión del `SessionStore` (el `RedisModule` de la app). |
+| `APP_CORS_CREDENTIALS` | — | `true` si frontend y API son cross-origin: sin esto el navegador no manda la cookie de sesión. |
+
+---
+
 ## Uso en NestJS
 
 Lo que escribe la app es: registrar el module, activar guard + filtro globales, y usar
@@ -122,6 +147,33 @@ import type { SsoConfig } from '@hemia/auth';
 export class AppModule {}
 ```
 
+#### Variante "Console" (config centralizada)
+
+Si ya tenés un `registerAs('sso', ...)` y un `RedisSessionStore`, el wrapper se reduce a
+pasar la config entera con `getOrThrow('sso')` — sin hooks ni factory inline:
+
+```ts
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { SsoModule, SESSION_STORE } from '@hemia/auth/nestjs';
+import type { SsoConfig } from '@hemia/auth';
+import { RedisModule } from './redis.module';
+import { RedisSessionStore } from './redis-session-store';
+
+@Module({
+  imports: [
+    SsoModule.forRootAsync({
+      imports: [ConfigModule, RedisModule],
+      inject: [ConfigService],
+      store: { provide: SESSION_STORE, useExisting: RedisSessionStore },
+      useFactoryConfig: (config: ConfigService): SsoConfig =>
+        config.getOrThrow<SsoConfig>('sso'),
+    }),
+  ],
+})
+export class AuthModule {}
+```
+
 ### 2. Bootstrap obligatorio (main.ts)
 
 Dos líneas imprescindibles, independientes de cómo apliques el guard:
@@ -137,12 +189,23 @@ app.useGlobalFilters(new SsoExceptionFilter());   // UnauthorizedError → 401, 
 Sin `cookieParser` el guard no ve la cookie de sesión; sin el filtro, los errores del
 core salen como 500 genérico.
 
+Orden práctico en `main.ts`: `cookieParser()` **antes** de cualquier cosa que dependa del
+guard, `useGlobalFilters(new SsoExceptionFilter())` para mapear los errores, y si frontend
+y API son cross-origin, habilitá CORS con credenciales (`APP_CORS_CREDENTIALS=true`) para
+que la cookie viaje.
+
 ### 3. Proteger rutas con el guard
 
 `SsoModule` es global, así que `SsoAuthGuard` (y `SSO_CONFIG`, del que depende) están
 disponibles en toda la app. Dos modos:
 
-**a) Por ruta/controlador** — explícito, granular:
+> **En Console el guard NO se aplica global.** Hacerlo global protegería *todos* los
+> endpoints, incluidos los de servicio-a-servicio (`/identity-access/external/*`), que se
+> autentican distinto (no por cookie de sesión SSO). Por eso ahí se usa
+> `@UseGuards(SsoAuthGuard)` por controlador. Reservá el modo global para apps donde
+> *todo* el tráfico es de usuario SSO.
+
+**a) Por ruta/controlador** — explícito, granular (recomendado si hay rutas externas):
 
 ```ts
 import { Public, CurrentUser, SsoAuthGuard } from '@hemia/auth/nestjs';
@@ -157,6 +220,15 @@ export class MeController {
   }
 }
 ```
+
+`@CurrentUser()` inyecta el `AuthenticatedUser` que el guard resolvió de la sesión: actúa
+como *proxy del usuario hacia Hemia ID*. Trae el contexto que tus services consumen sin
+re-llamar al SSO: `ssoUserId`, `email`, `tenantId`, `organizationId`, `teamId`, `roles`,
+`permissions`, y `internalUserId` (si poblaste el hook `onUserResolved`). Pasalo tal cual
+a la capa de servicio para decidir tenant/autorización.
+
+> Console lo importa como `CurrentUserPayload` desde `@hemia/auth/nestjs`: es un alias de
+> `AuthenticatedUser` exportado por el adapter. Los dos nombres apuntan al mismo shape.
 
 **b) Global** — protege todo, y eximís endpoints con `@Public()`:
 
@@ -186,6 +258,13 @@ export class DocumentsController {
 
 ### 4. (Opcional) Llamadas servicio-a-servicio
 
+Dos tipos de autenticación, no se mezclan:
+
+- **Usuario SSO** — login PKCE + cookie de sesión. Es lo que resuelve `SsoAuthGuard` y lo
+  que llega como `@CurrentUser()`. Para tráfico de un humano en el navegador.
+- **Servicio-a-servicio** — `client_credentials` (sin usuario). Es `SsoClient`, para que
+  tu API llame a otra API. No usa cookie ni sesión.
+
 `SsoClient` da el token `client_credentials` cacheado + `request()` autenticado. Cada
 app arma sus endpoints encima — eso es código de la app, no del package:
 
@@ -210,6 +289,10 @@ export class IdentityClient {
   }
 }
 ```
+
+> Estado en Console: las llamadas `client_credentials` todavía usan un
+> `HemiaIdExternalClient` propio, no `SsoClient`. La migración a `SsoClient` está
+> pendiente; este ejemplo es el destino, no lo que corre hoy.
 
 ### 5. (Opcional) Webhook
 

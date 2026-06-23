@@ -39,6 +39,18 @@ describe('PermissionsGuard', () => {
     await expect(guard.canActivate(createContext())).resolves.toBe(true);
   });
 
+  it('allows global wildcards', async () => {
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(['users.delete']),
+    } as unknown as Reflector;
+    const rolesService = {
+      getEffectivePermissionCodes: jest.fn().mockResolvedValue(['*']),
+    } as unknown as RolesService;
+    const guard = new PermissionsGuard(reflector, rolesService);
+
+    await expect(guard.canActivate(createContext())).resolves.toBe(true);
+  });
+
   it('rejects missing permissions', async () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(['users.delete']),

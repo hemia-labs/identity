@@ -5,6 +5,7 @@ import { CreatePermissionDto } from './dtos/create-permission.dto';
 import { PermissionEntity } from './entities/permission.entity';
 
 const BASE_PERMISSIONS: CreatePermissionDto[] = [
+  { code: '*.*', resource: '*', action: '*' },
   { code: 'users.create', resource: 'users', action: 'create' },
   { code: 'users.read', resource: 'users', action: 'read' },
   { code: 'users.update', resource: 'users', action: 'update' },
@@ -63,6 +64,8 @@ const BASE_PERMISSIONS: CreatePermissionDto[] = [
   { code: 'api_keys.read', resource: 'api_keys', action: 'read' },
   { code: 'api_keys.revoke', resource: 'api_keys', action: 'revoke' },
   { code: 'audit_logs.read', resource: 'audit_logs', action: 'read' },
+  { code: 'docs.access', resource: 'docs', action: 'access' },
+  { code: 'docs.*', resource: 'docs', action: '*' },
 ];
 
 @Injectable()

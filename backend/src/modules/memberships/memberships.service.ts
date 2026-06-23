@@ -1,9 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  IdentityEventType,
-} from '../identity-events/entities/identity-event.entity';
+import { IdentityEventType } from '../identity-events/entities/identity-event.entity';
 import { IdentityEventsService } from '../identity-events/identity-events.service';
 import { CreateMembershipDto } from './dtos/create-membership.dto';
 import {
@@ -63,7 +61,9 @@ export class MembershipsService {
     const query = this.membershipsRepository
       .createQueryBuilder('membership')
       .where('membership.user_id = :userId', { userId: input.userId })
-      .andWhere('membership.tenant_id = :tenantId', { tenantId: input.tenantId });
+      .andWhere('membership.tenant_id = :tenantId', {
+        tenantId: input.tenantId,
+      });
 
     if (input.organizationId) {
       query.andWhere('membership.organization_id = :organizationId', {
@@ -102,6 +102,7 @@ export class MembershipsService {
   findActiveByUser(userId: string) {
     return this.membershipsRepository.find({
       where: { userId, status: MembershipStatus.Active },
+      relations: { tenant: true, organization: true, team: true },
       order: { createdAt: 'ASC' },
     });
   }
