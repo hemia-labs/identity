@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { MembershipEntity } from '../memberships/entities/membership.entity';
 import { MembershipsService } from '../memberships/memberships.service';
 import { SessionsService } from '../sessions/sessions.service';
 
@@ -11,14 +12,9 @@ export class AccountsService {
 
   async listAccounts(userId: string) {
     const memberships = await this.membershipsService.findActiveByUser(userId);
-    return memberships.map((membership, index) => ({
-      accountIndex: index,
-      membershipId: membership.id,
-      tenantId: membership.tenantId,
-      organizationId: membership.organizationId,
-      teamId: membership.teamId,
-      status: membership.status,
-    }));
+    return memberships.map((membership, index) =>
+      this.toAccountResponse(membership, index),
+    );
   }
 
   async switchAccount(userId: string, sessionId: string, accountIndex: number) {
@@ -37,11 +33,7 @@ export class AccountsService {
     });
 
     return {
-      accountIndex,
-      membershipId: membership.id,
-      tenantId: membership.tenantId,
-      organizationId: membership.organizationId,
-      teamId: membership.teamId,
+      ...this.toAccountResponse(membership, accountIndex),
       sessionId: session?.id ?? sessionId,
     };
   }
@@ -63,6 +55,42 @@ export class AccountsService {
       tenantId: tenantId ?? null,
       organizationId: organizationId ?? null,
       teamId: teamId ?? null,
+    };
+  }
+
+  private toAccountResponse(
+    membership: MembershipEntity,
+    accountIndex: number,
+  ) {
+    return {
+      accountIndex,
+      membershipId: membership.id,
+      tenantId: membership.tenantId,
+      organizationId: membership.organizationId,
+      teamId: membership.teamId,
+      status: membership.status,
+      tenant: membership.tenant
+        ? {
+            name: membership.tenant.name,
+            slug: membership.tenant.slug,
+            status: membership.tenant.status,
+            plan: membership.tenant.plan ?? null,
+          }
+        : null,
+      organization: membership.organization
+        ? {
+            name: membership.organization.name,
+            slug: membership.organization.slug,
+            legalName: membership.organization.legalName ?? null,
+          }
+        : null,
+      team: membership.team
+        ? {
+            name: membership.team.name,
+            slug: membership.team.slug,
+            description: membership.team.description ?? null,
+          }
+        : null,
     };
   }
 }

@@ -48,6 +48,7 @@ export class PermissionsGuard implements CanActivate {
   private hasPermission(granted: Set<string>, permission: string) {
     const [resource] = permission.split('.');
     return (
+      granted.has('*') ||
       granted.has(permission) ||
       granted.has(`${resource}.*`) ||
       granted.has('*.*')

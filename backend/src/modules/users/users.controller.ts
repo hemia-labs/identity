@@ -25,52 +25,67 @@ export class UsersController {
 
   @Post()
   @Permissions('users.create')
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  async create(@Body() dto: CreateUserDto) {
+    const user = await this.usersService.create(dto);
+    return this.usersService.toPublicUser(user);
   }
 
   @Get()
   @Permissions('users.read')
-  findAll(@CurrentTenant() tenantId: string) {
-    return this.usersService.findAll(tenantId);
+  async findAll(@CurrentTenant() tenantId: string) {
+    const users = await this.usersService.findAll(tenantId);
+    return users.map((user) => this.usersService.toPublicUser(user));
   }
 
   @Get(':id')
   @Permissions('users.read')
-  findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.usersService.findOne(id, tenantId);
+  async findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    const user = await this.usersService.findOne(id, tenantId);
+    return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id')
   @Permissions('users.update')
-  update(
+  async update(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
   ) {
-    return this.usersService.update(id, dto, tenantId);
+    const user = await this.usersService.update(id, dto, tenantId);
+    return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id/status')
   @Permissions('users.update')
-  updateStatus(
+  async updateStatus(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
     @Body('status') status: UserStatus,
   ) {
-    return this.usersService.updateStatus(id, status, tenantId);
+    const user = await this.usersService.updateStatus(id, status, tenantId);
+    return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id/lock')
   @Permissions('users.lock')
-  lock(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.usersService.updateStatus(id, UserStatus.Locked, tenantId);
+  async lock(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    const user = await this.usersService.updateStatus(
+      id,
+      UserStatus.Locked,
+      tenantId,
+    );
+    return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id/unlock')
   @Permissions('users.unlock')
-  unlock(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.usersService.updateStatus(id, UserStatus.Active, tenantId);
+  async unlock(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    const user = await this.usersService.updateStatus(
+      id,
+      UserStatus.Active,
+      tenantId,
+    );
+    return this.usersService.toPublicUser(user);
   }
 
   @Delete(':id')

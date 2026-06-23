@@ -16,6 +16,8 @@ import { RoleEntity } from './entities/role.entity';
 import { UserRoleEntity } from './entities/user-role.entity';
 
 const GLOBAL_ONLY_ROLES = new Set(['SUPER_ADMIN']);
+const SUPER_ADMIN_ROLE_CODE = 'SUPER_ADMIN';
+const GLOBAL_PERMISSION_WILDCARD = '*.*';
 
 @Injectable()
 export class RolesService {
@@ -107,6 +109,12 @@ export class RolesService {
 
   async getEffectivePermissionCodes(user: AuthenticatedUser) {
     const roles = await this.findEffectiveUserRoles(user);
+    if (
+      roles.some((userRole) => userRole.role.code === SUPER_ADMIN_ROLE_CODE)
+    ) {
+      return [GLOBAL_PERMISSION_WILDCARD];
+    }
+
     const roleIds = roles.map((userRole) => userRole.roleId);
     if (roleIds.length === 0) {
       return [];

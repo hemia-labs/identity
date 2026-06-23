@@ -629,6 +629,7 @@ export class OAuthService {
   private hasPermission(permissions: string[], permission: string) {
     const [resource] = permission.split('.');
     return (
+      permissions.includes('*') ||
       permissions.includes(permission) ||
       permissions.includes(`${resource}.*`) ||
       permissions.includes('*.*')

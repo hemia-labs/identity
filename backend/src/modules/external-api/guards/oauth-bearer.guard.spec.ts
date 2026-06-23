@@ -35,4 +35,25 @@ describe('OAuthBearerGuard external scopes', () => {
       ForbiddenException,
     );
   });
+
+  it('allows tokens with the global permission wildcard', async () => {
+    const oauthService = {
+      introspect: jest.fn(() =>
+        Promise.resolve({
+          active: true,
+          scope: '',
+          permissions: ['*'],
+        }),
+      ),
+    };
+    const reflector = {
+      getAllAndOverride: jest.fn(() => ['identity.teams.read']),
+    };
+    const guard = new OAuthBearerGuard(
+      oauthService as never,
+      reflector as unknown as Reflector,
+    );
+
+    await expect(guard.canActivate(createContext())).resolves.toBe(true);
+  });
 });

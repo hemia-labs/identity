@@ -85,6 +85,7 @@ export class OAuthBearerGuard implements CanActivate {
   private hasPermission(permissions: Set<string>, permission: string) {
     const [resource] = permission.split('.');
     return (
+      permissions.has('*') ||
       permissions.has(permission) ||
       permissions.has(`${resource}.*`) ||
       permissions.has('*.*')

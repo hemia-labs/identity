@@ -20,6 +20,22 @@ export type SessionAccount = {
   organizationId?: string | null
   teamId?: string | null
   status: string
+  tenant?: {
+    name: string
+    slug: string
+    status: string
+    plan?: string | null
+  } | null
+  organization?: {
+    name: string
+    slug: string
+    legalName?: string | null
+  } | null
+  team?: {
+    name: string
+    slug: string
+    description?: string | null
+  } | null
 }
 
 export type OAuthConsentScope = {
