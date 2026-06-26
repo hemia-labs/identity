@@ -117,6 +117,7 @@ import type { SsoConfig } from '@hemia/auth';
         authorizationUrl: cfg.getOrThrow('sso.authorizationUrl'),
         tokenUrl:         cfg.getOrThrow('sso.tokenUrl'),
         revocationUrl:    cfg.get('sso.revocationUrl'),
+        logoutUrl:        cfg.get('sso.logoutUrl'),
         redirectUri:      cfg.getOrThrow('sso.redirectUri'),
         frontendUrl:      cfg.getOrThrow('sso.frontendUrl'),
         scope:            'openid profile email offline_access docs.access',

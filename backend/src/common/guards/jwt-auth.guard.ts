@@ -31,6 +31,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     >();
     const bearer = this.bearerToken(req);
 
+    console.log('[jwt auth guard ] ', bearer);
+     console.log('[jwt auth cookies ] ', req.cookies?.[ACCESS_TOKEN_COOKIE]);
     // Cookie de sesión (o sin Bearer) → ruta HS256 actual, sin cambios.
     if (req.cookies?.[ACCESS_TOKEN_COOKIE] || !bearer) {
       return (await super.canActivate(context)) as boolean;
@@ -40,6 +42,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     // ponytail: OAuthService resuelto por ModuleRef para esquivar el ciclo AuthModule<->OAuthModule.
     const oauth = this.moduleRef.get(OAuthService, { strict: false });
     const intro = (await oauth.introspect({ token: bearer })) as IntrospectResult;
+    console.log('[jwt auth intro ] ', intro);
     if (intro.active && intro.sub && intro.session_id) {
       req.user = {
         id: intro.sub,

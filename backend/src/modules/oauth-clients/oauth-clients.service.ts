@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
@@ -13,6 +17,11 @@ import { UpdateOAuthClientDto } from './dtos/update-oauth-client.dto';
 
 // View = client sin el hash del secret (nunca se expone).
 type OAuthClientView = Omit<OAuthClientEntity, 'clientSecretHash'>;
+type OAuthClientArrayKey =
+  | 'redirectUris'
+  | 'scopes'
+  | 'grantTypes'
+  | 'responseTypes';
 
 @Injectable()
 export class OAuthClientsService {
@@ -72,6 +81,40 @@ export class OAuthClientsService {
     return { ...this.toView(client), clientSecret: secret };
   }
 
+  addRedirectUri(id: string, value: string) {
+    this.assertUrlWithProtocol(value);
+    return this.addValue(id, 'redirectUris', value);
+  }
+
+  removeRedirectUri(id: string, value: string) {
+    this.assertUrlWithProtocol(value);
+    return this.removeValue(id, 'redirectUris', value);
+  }
+
+  addScope(id: string, value: string) {
+    return this.addValue(id, 'scopes', value);
+  }
+
+  removeScope(id: string, value: string) {
+    return this.removeValue(id, 'scopes', value);
+  }
+
+  addGrantType(id: string, value: string) {
+    return this.addValue(id, 'grantTypes', value);
+  }
+
+  removeGrantType(id: string, value: string) {
+    return this.removeValue(id, 'grantTypes', value);
+  }
+
+  addResponseType(id: string, value: string) {
+    return this.addValue(id, 'responseTypes', value);
+  }
+
+  removeResponseType(id: string, value: string) {
+    return this.removeValue(id, 'responseTypes', value);
+  }
+
   async remove(id: string) {
     const client = await this.findEntity(id);
     client.status = OAuthClientStatus.Deleted;
@@ -89,6 +132,37 @@ export class OAuthClientsService {
 
   private generateSecret() {
     return randomBytes(32).toString('base64url');
+  }
+
+  private async addValue(
+    id: string,
+    key: OAuthClientArrayKey,
+    value: string,
+  ): Promise<OAuthClientView> {
+    const client = await this.findEntity(id);
+    client[key] = [...new Set([...(client[key] ?? []), value])];
+    return this.toView(await this.clientsRepository.save(client));
+  }
+
+  private async removeValue(
+    id: string,
+    key: OAuthClientArrayKey,
+    value: string,
+  ): Promise<OAuthClientView> {
+    const client = await this.findEntity(id);
+    client[key] = (client[key] ?? []).filter((item) => item !== value);
+    return this.toView(await this.clientsRepository.save(client));
+  }
+
+  private assertUrlWithProtocol(value: string) {
+    try {
+      const url = new URL(value);
+      if (!url.protocol) {
+        throw new Error();
+      }
+    } catch {
+      throw new BadRequestException('redirect uri must be an absolute URL');
+    }
   }
 
   private toView(client: OAuthClientEntity): OAuthClientView {

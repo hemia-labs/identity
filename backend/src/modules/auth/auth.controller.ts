@@ -100,15 +100,17 @@ export class AuthController {
     @Req() request: Request & { user?: AuthenticatedUser | null },
     @Res({ passthrough: true }) response: Response,
   ) {
+    let result = { revoked: false };
     try {
-      const result = request.user?.sessionId
+      result = request.user?.sessionId
         ? await this.authService.logout(request.user.sessionId)
-        : { revoked: false };
-      this.clearAuthCookies(response);
-      return { ...result, cleared: true };
+        : result;
     } catch {
-      return { revoked: false };
+      result = { revoked: false };
+    } finally {
+      this.clearAuthCookies(response);
     }
+    return { ...result, cleared: true };
   }
 
   @UseGuards(JwtAuthGuard)
