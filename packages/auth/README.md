@@ -257,6 +257,60 @@ export class DocumentsController {
 }
 ```
 
+### Decoradores y forma del usuario
+
+| Decorador | Qué hace |
+|---|---|
+| `@UseGuards(SsoAuthGuard)` | Protege la ruta/controlador: exige sesión válida o responde 401. |
+| `@Public()` | Exime del guard global una ruta/controlador. |
+| `@CurrentUser()` | Inyecta el `AuthenticatedUser` que el guard cuelga en `req.user`. |
+
+`@CurrentUser()` solo está poblado en rutas que pasan por `SsoAuthGuard`: en una ruta
+`@Public()` (o sin guard) devuelve `undefined`, porque es el guard quien lo adjunta. No
+acepta selector de campo (`@CurrentUser('email')` no está soportado).
+
+Devuelve el `AuthenticatedUser` **más** el contexto de auth (`CurrentUserPayload`), para
+poder reenviar el token del usuario a APIs de contexto-usuario:
+
+```ts
+/** Lo que inyecta @CurrentUser(): AuthenticatedUser & RequestAuthContext */
+type CurrentUserPayload = AuthenticatedUser & RequestAuthContext;
+
+interface AuthenticatedUser {
+  ssoUserId: string;
+  email: string;
+  name: string;
+  tenantId: string;
+  organizationId: string;
+  teamId: string;
+  roles: string[];
+  permissions: string[];
+  internalUserId?: string;   // poblado por el hook onUserResolved
+}
+
+interface RequestAuthContext {
+  accessToken: string;       // access token del usuario (de la sesión en el store, ya refrescado)
+  cookie: string;            // valor crudo de la cookie de sesión (id opaco)
+  authorization: string;     // `Bearer <accessToken>`, listo para reenviar
+}
+```
+
+Ejemplo: reenviar el token del usuario a una API de identity de contexto-usuario:
+
+```ts
+@Get('profile')
+@UseGuards(SsoAuthGuard)
+profile(@CurrentUser() user: CurrentUserPayload) {
+  return fetch('https://identity.../identity-access/users/' + user.ssoUserId, {
+    headers: { Authorization: user.authorization },   // Bearer <accessToken> del usuario
+  }).then((r) => r.json());
+}
+```
+
+> El `accessToken`/`authorization` quedan disponibles en **todas** las rutas protegidas
+> por el guard. Si tu modelo de seguridad prefiere no exponer el token al handler, no lo
+> uses — `@CurrentUser()` sigue trayendo el usuario igual.
+
 ### 4. (Opcional) Llamadas servicio-a-servicio
 
 Dos tipos de autenticación, no se mezclan:

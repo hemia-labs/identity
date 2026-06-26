@@ -1,14 +1,22 @@
 {
   "name": "@hemia/auth",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "description": "Cliente reutilizable de SSO OAuth/OIDC de Hemia: core en TS puro + adapter NestJS.",
   "license": "MIT",
   "author": "Hemia",
   "keywords": ["sso", "oauth", "oidc", "pkce", "jwks", "nestjs", "auth"],
   "main": "./dist/core/index.js",
+  "types": "./dist/core/index.d.ts",
+  "module": "./dist/core/index.mjs",
   "exports": {
-    ".":        { "types": "./dist/core/index.d.ts",  "require": "./dist/core/index.js" },
-    "./nestjs": { "types": "./dist/nestjs/index.d.ts", "require": "./dist/nestjs/index.js" }
+    ".": {
+      "import":  { "types": "./dist/core/index.d.mts", "default": "./dist/core/index.mjs" },
+      "require": { "types": "./dist/core/index.d.ts",  "default": "./dist/core/index.js" }
+    },
+    "./nestjs": {
+      "import":  { "types": "./dist/nestjs/index.d.mts", "default": "./dist/nestjs/index.mjs" },
+      "require": { "types": "./dist/nestjs/index.d.ts",  "default": "./dist/nestjs/index.js" }
+    }
   },
   "files": ["dist"],
   "scripts": {
