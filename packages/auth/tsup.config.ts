@@ -5,7 +5,7 @@ export default defineConfig({
     'core/index': 'src/core/index.ts',
     'nestjs/index': 'src/nestjs/index.ts',
   },
-  format: ['cjs'],
+  format: ['cjs', 'esm'],
   dts: true,
   clean: true,
   sourcemap: true,

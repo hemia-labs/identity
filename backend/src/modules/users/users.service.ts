@@ -2,9 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import argon2 from 'argon2';
 import { Repository } from 'typeorm';
-import {
-  IdentityEventType,
-} from '../identity-events/entities/identity-event.entity';
+import { IdentityEventType } from '../identity-events/entities/identity-event.entity';
 import { IdentityEventsService } from '../identity-events/identity-events.service';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateUserDto } from './dtos/update-user.dto';
@@ -78,9 +76,12 @@ export class UsersService {
   findByIdentifier(identifier: string) {
     const normalized = identifier.toLowerCase();
 
-    return this.usersRepository.findOne({
-      where: [{ email: normalized }, { username: normalized }],
-    });
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.email = :identifier', { identifier: normalized })
+      .orWhere('user.username = :identifier', { identifier: normalized })
+      .getOne();
   }
 
   findByEmail(email: string) {
@@ -172,6 +173,23 @@ export class UsersService {
       avatarUrl: user.avatarUrl,
       status: this.toExternalStatus(user.status),
       rawStatus: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      deletedAt: user.deletedAt,
+    };
+  }
+
+  toPublicUser(user: UserEntity) {
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.avatarUrl,
+      status: user.status,
+      lockedAt: user.lockedAt,
+      lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       deletedAt: user.deletedAt,

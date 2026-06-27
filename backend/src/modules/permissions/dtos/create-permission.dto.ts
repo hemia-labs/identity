@@ -3,7 +3,7 @@ import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 export class CreatePermissionDto {
   @IsString()
   @MaxLength(160)
-  @Matches(/^[a-z0-9_]+\.[a-z0-9_]+$/)
+  @Matches(/^(\*|[a-z0-9_]+(?:\.[a-z0-9_]+)*\.(?:[a-z0-9_]+|\*))$/)
   code: string;
 
   @IsString()

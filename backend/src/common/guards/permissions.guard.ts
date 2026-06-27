@@ -33,6 +33,7 @@ export class PermissionsGuard implements CanActivate {
 
     const grantedPermissions =
       await this.rolesService.getEffectivePermissionCodes(request.user);
+
     const granted = new Set(grantedPermissions);
     const allowed = requiredPermissions.every((permission) =>
       this.hasPermission(granted, permission),
@@ -48,6 +49,7 @@ export class PermissionsGuard implements CanActivate {
   private hasPermission(granted: Set<string>, permission: string) {
     const [resource] = permission.split('.');
     return (
+      granted.has('*') ||
       granted.has(permission) ||
       granted.has(`${resource}.*`) ||
       granted.has('*.*')

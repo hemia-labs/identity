@@ -5,6 +5,7 @@ import argon2 from 'argon2';
 import { DataSource, QueryRunner } from 'typeorm';
 
 const basePermissions = [
+  ['*.*', '*', '*'],
   ['users.create', 'users', 'create'],
   ['users.read', 'users', 'read'],
   ['users.update', 'users', 'update'],
@@ -27,6 +28,13 @@ const basePermissions = [
   ['memberships.read', 'memberships', 'read'],
   ['memberships.update', 'memberships', 'update'],
   ['memberships.delete', 'memberships', 'delete'],
+  ['invitations.create', 'invitations', 'create'],
+  ['invitations.read', 'invitations', 'read'],
+  ['invitations.update', 'invitations', 'update'],
+  ['identity.users.read', 'identity.users', 'read'],
+  ['identity.memberships.read', 'identity.memberships', 'read'],
+  ['identity.invitations.write', 'identity.invitations', 'write'],
+  ['identity.events.read', 'identity.events', 'read'],
   ['roles.create', 'roles', 'create'],
   ['roles.read', 'roles', 'read'],
   ['roles.update', 'roles', 'update'],
@@ -107,10 +115,19 @@ async function seedRoles(queryRunner: QueryRunner) {
 
 async function seedRolePermissions(queryRunner: QueryRunner) {
   await queryRunner.query(`
+    DELETE FROM "role_permissions" role_permission
+    USING "roles" role, "permissions" permission
+    WHERE role_permission.role_id = role.id
+      AND role_permission.permission_id = permission.id
+      AND role.code = 'SUPER_ADMIN'
+      AND permission.code <> '*.*'
+  `);
+
+  await queryRunner.query(`
     INSERT INTO "role_permissions" ("role_id", "permission_id")
     SELECT role.id, permission.id
     FROM "roles" role
-    CROSS JOIN "permissions" permission
+    JOIN "permissions" permission ON permission.code = '*.*'
     WHERE role.code = 'SUPER_ADMIN'
     ON CONFLICT ("role_id", "permission_id") DO NOTHING
   `);
@@ -187,24 +204,7 @@ async function seedSuperAdmin(queryRunner: QueryRunner) {
     throw new Error('Could not create super admin user');
   }
 
-  await queryRunner.query(
-    `
-      INSERT INTO "user_roles" ("user_id", "role_id")
-      SELECT $1, role.id
-      FROM "roles" role
-      WHERE role.code = 'SUPER_ADMIN'
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "user_roles" user_role
-          WHERE user_role.user_id = $1
-            AND user_role.role_id = role.id
-            AND user_role.tenant_id IS NULL
-            AND user_role.organization_id IS NULL
-            AND user_role.team_id IS NULL
-        )
-    `,
-    [userId],
-  );
+  await assignGlobalRole(queryRunner, userId, 'SUPER_ADMIN');
 }
 
 async function seedLocalUser(queryRunner: QueryRunner) {
@@ -213,7 +213,7 @@ async function seedLocalUser(queryRunner: QueryRunner) {
   const teamId = await seedTeam(queryRunner, tenantId, organizationId);
 
   await seedOAuthClient(queryRunner);
-  await seedUser(queryRunner, {
+  const userId = await seedUser(queryRunner, {
     email: process.env.SEED_USER_EMAIL ?? 'admin@hemia.local',
     username: process.env.SEED_USER_USERNAME ?? 'admin',
     firstName: process.env.SEED_USER_FIRST_NAME ?? 'Admin',
@@ -224,6 +224,7 @@ async function seedLocalUser(queryRunner: QueryRunner) {
     organizationId,
     teamId,
   });
+  await assignGlobalRole(queryRunner, userId, 'SUPER_ADMIN');
 }
 
 async function seedTenant(queryRunner: QueryRunner) {
@@ -411,7 +412,7 @@ async function seedUser(
     organizationId: string;
     teamId: string;
   },
-) {
+): Promise<string> {
   const passwordHash = await argon2.hash(input.password, {
     type: argon2.argon2id,
   });
@@ -500,6 +501,33 @@ async function seedUser(
       input.teamId,
       input.roleCode,
     ],
+  );
+
+  return userId;
+}
+
+async function assignGlobalRole(
+  queryRunner: QueryRunner,
+  userId: string,
+  roleCode: string,
+) {
+  await queryRunner.query(
+    `
+      INSERT INTO "user_roles" ("user_id", "role_id")
+      SELECT $1, role.id
+      FROM "roles" role
+      WHERE role.code = $2
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "user_roles" user_role
+          WHERE user_role.user_id = $1
+            AND user_role.role_id = role.id
+            AND user_role.tenant_id IS NULL
+            AND user_role.organization_id IS NULL
+            AND user_role.team_id IS NULL
+        )
+    `,
+    [userId, roleCode],
   );
 }
 

@@ -12,6 +12,7 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { CreateOAuthClientDto } from './dtos/create-oauth-client.dto';
+import { OAuthClientValueDto } from './dtos/oauth-client-value.dto';
 import { UpdateOAuthClientDto } from './dtos/update-oauth-client.dto';
 import { OAuthClientsService } from './oauth-clients.service';
 
@@ -48,6 +49,57 @@ export class OAuthClientsController {
   @Permissions('oauth_clients.update')
   rotateSecret(@Param('id') id: string) {
     return this.oauthClientsService.rotateSecret(id);
+  }
+
+  @Post(':id/redirect-uris')
+  @Permissions('oauth_clients.update')
+  addRedirectUri(@Param('id') id: string, @Body() dto: OAuthClientValueDto) {
+    return this.oauthClientsService.addRedirectUri(id, dto.value);
+  }
+
+  @Delete(':id/redirect-uris')
+  @Permissions('oauth_clients.update')
+  removeRedirectUri(@Param('id') id: string, @Body() dto: OAuthClientValueDto) {
+    return this.oauthClientsService.removeRedirectUri(id, dto.value);
+  }
+
+  @Post(':id/scopes')
+  @Permissions('oauth_clients.update')
+  addScope(@Param('id') id: string, @Body() dto: OAuthClientValueDto) {
+    return this.oauthClientsService.addScope(id, dto.value);
+  }
+
+  @Delete(':id/scopes')
+  @Permissions('oauth_clients.update')
+  removeScope(@Param('id') id: string, @Body() dto: OAuthClientValueDto) {
+    return this.oauthClientsService.removeScope(id, dto.value);
+  }
+
+  @Post(':id/grant-types')
+  @Permissions('oauth_clients.update')
+  addGrantType(@Param('id') id: string, @Body() dto: OAuthClientValueDto) {
+    return this.oauthClientsService.addGrantType(id, dto.value);
+  }
+
+  @Delete(':id/grant-types')
+  @Permissions('oauth_clients.update')
+  removeGrantType(@Param('id') id: string, @Body() dto: OAuthClientValueDto) {
+    return this.oauthClientsService.removeGrantType(id, dto.value);
+  }
+
+  @Post(':id/response-types')
+  @Permissions('oauth_clients.update')
+  addResponseType(@Param('id') id: string, @Body() dto: OAuthClientValueDto) {
+    return this.oauthClientsService.addResponseType(id, dto.value);
+  }
+
+  @Delete(':id/response-types')
+  @Permissions('oauth_clients.update')
+  removeResponseType(
+    @Param('id') id: string,
+    @Body() dto: OAuthClientValueDto,
+  ) {
+    return this.oauthClientsService.removeResponseType(id, dto.value);
   }
 
   @Delete(':id')

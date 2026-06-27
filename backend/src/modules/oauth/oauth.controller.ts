@@ -70,10 +70,16 @@ export class OAuthController {
     @Req() request: Request & { user?: AuthenticatedUser | null },
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = request.user?.sessionId
-      ? await this.authService.logout(request.user.sessionId)
-      : { revoked: false };
-    this.clearAuthCookies(response);
+    let result = { revoked: false };
+    try {
+      result = request.user?.sessionId
+        ? await this.authService.logout(request.user.sessionId)
+        : result;
+    } catch (e) {
+      result = { revoked: false };
+    } finally {
+      this.clearAuthCookies(response);
+    }
     return { ...result, cleared: true };
   }
 

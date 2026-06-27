@@ -127,14 +127,14 @@ export class SsoCore {
    *
    * @returns Si algún token se revocó correctamente de forma remota.
    */
-  async logout(sessionId?: string): Promise<{ revoked: boolean }> {
+  async logout(sessionId?: string): Promise<{ revoked: boolean; logoutUrl?: string }> {
     const session = sessionId
       ? await this.store.get<Session>(sessionKey(sessionId))
       : undefined;
 
     const revoked = await this.revokeAtSso(session ?? undefined);
     if (sessionId) await this.store.delete(sessionKey(sessionId));
-    return { revoked };
+    return { revoked, ...(this.cfg.logoutUrl && { logoutUrl: this.cfg.logoutUrl }) };
   }
 
   /** Construye la URL de frontend a la que redirigir cuando un login falla. */
