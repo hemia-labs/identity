@@ -42,7 +42,6 @@ export class OAuthController {
     @Res() response: Response,
   ) {
     const user = (request as AuthenticatedRequest).user;
-    console.log('[OAuthController] -> authorize', user);
     if (!user) {
       const frontendUrl =
         this.configService.getOrThrow<string>('app.frontendUrl');
@@ -71,15 +70,12 @@ export class OAuthController {
     @Req() request: Request & { user?: AuthenticatedUser | null },
     @Res({ passthrough: true }) response: Response,
   ) {
-     console.log('[OAuthController] -> logout entry ');
     let result = { revoked: false };
     try {
       result = request.user?.sessionId
         ? await this.authService.logout(request.user.sessionId)
         : result;
-         console.log('[OAuthController] -> logout ',result);
     } catch (e) {
-       console.log('[OAuthController] -> catch ',e);
       result = { revoked: false };
     } finally {
       this.clearAuthCookies(response);
@@ -102,8 +98,6 @@ export class OAuthController {
     const configuredDomain = baseOptions.domain;
     const paths = ['/', '/api/v1', '/api/v1/auth', '/oauth'];
     const domains = configuredDomain ? [configuredDomain, undefined] : [undefined];
-
-    console.log('[OAuthController] -> expireAuthCookie', baseOptions, paths, domains);
 
     for (const path of paths) {
       for (const domain of domains) {

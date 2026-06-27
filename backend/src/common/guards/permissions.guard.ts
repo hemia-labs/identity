@@ -33,7 +33,7 @@ export class PermissionsGuard implements CanActivate {
 
     const grantedPermissions =
       await this.rolesService.getEffectivePermissionCodes(request.user);
-      console.log('[grantedPermissions] ', grantedPermissions);
+
     const granted = new Set(grantedPermissions);
     const allowed = requiredPermissions.every((permission) =>
       this.hasPermission(granted, permission),
