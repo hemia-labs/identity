@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     'core/index': 'src/core/index.ts',
     'nestjs/index': 'src/nestjs/index.ts',
+    'sveltekit/index': 'src/sveltekit/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

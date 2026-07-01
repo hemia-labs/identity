@@ -6,6 +6,7 @@ cada una. **Core en TypeScript puro** (sin framework) + **adapter NestJS** encim
 - `@hemia/auth` → core framework-agnostic (login PKCE, verificación JWKS, sesión con
   refresh, logout, token servicio-a-servicio, firma de webhooks).
 - `@hemia/auth/nestjs` → module, controller `/auth/*`, guard y decoradores listos.
+- `@hemia/auth/sveltekit` → handlers para `/auth/*` y un `Handle` de `hooks.server.ts`.
 
 El core nunca toca `req`/`res` ni lanza excepciones de NestJS: devuelve *intenciones*
 (`{ url }`, `{ cookieValue, redirectUrl }`) y clases de error propias
@@ -19,8 +20,9 @@ El core nunca toca `req`/`res` ni lanza excepciones de NestJS: devuelve *intenci
 npm i @hemia/auth
 ```
 
-NestJS es **peer opcional**: si solo usas el core no lo necesitas. El adapter requiere
-`@nestjs/common` y `@nestjs/core` (>=10), que tu app ya tiene.
+NestJS y SvelteKit son **peers opcionales**: si solo usas el core no los necesitas. El
+adapter NestJS requiere `@nestjs/common` y `@nestjs/core` (>=10); el de SvelteKit requiere
+`@sveltejs/kit` (>=2). En ambos casos, la app ya los tiene.
 
 ---
 
@@ -57,6 +59,16 @@ Rutas que monta el module automáticamente:
 | `GET` | `/auth/callback` | Intercambia el code, crea sesión, setea la cookie y redirige al frontend. |
 | `GET` | `/auth/session` | Devuelve `{ authenticated, user }`; refresca si está por expirar. |
 | `POST` | `/auth/logout` | Revoca tokens y limpia la cookie. |
+
+### Adapter SvelteKit (`@hemia/auth/sveltekit`)
+
+| Export | Qué hace |
+|---|---|
+| `createSsoHandlers(core, cfg)` | Devuelve `{ login, callback, session, logout }`: un handler por ruta, listo para exportar tal cual en `+server.ts`. |
+| `createSsoHook(core, cfg)` | `Handle` de `hooks.server.ts`: resuelve la cookie de sesión y cuelga el usuario en `event.locals.user` (con refresh automático). No fuerza autenticación — a diferencia del guard de NestJS, cada ruta decide si redirige cuando falta `locals.user`. |
+
+No hay module ni DI: SvelteKit no tiene contenedor, así que instanciás `SsoCore` una vez
+en un módulo server-only y lo importás donde haga falta.
 
 ---
 
@@ -398,6 +410,102 @@ Se inyectan en la config; nunca entran al package:
   para la vista normalizada.
 - `onUserResolved(user)` → `{ internalUserId }` — mapea el usuario del SSO a tu registro
   interno; el id se guarda en `user.internalUserId`.
+
+---
+
+## Uso en SvelteKit
+
+Instanciás `SsoCore` una vez (server-only, nunca importado desde código de cliente) y lo
+pegás a las rutas y al hook.
+
+### 1. Instancia compartida
+
+```ts
+// src/lib/server/auth.ts
+import { SsoCore, validateConfig } from '@hemia/auth';
+import { createSsoHandlers, createSsoHook } from '@hemia/auth/sveltekit';
+import type { SsoConfig } from '@hemia/auth';
+import { RedisSessionStore } from './redis-session-store';
+
+const cfg: SsoConfig = {
+  issuer: env.SSO_ISSUER,
+  clientId: env.SSO_CLIENT_ID,
+  clientSecret: env.SSO_CLIENT_SECRET,
+  audience: env.SSO_AUDIENCE,
+  jwksUrl: env.SSO_JWKS_URL,
+  authorizationUrl: env.SSO_AUTHORIZATION_URL,
+  tokenUrl: env.SSO_TOKEN_URL,
+  revocationUrl: env.SSO_REVOCATION_URL,
+  logoutUrl: env.SSO_LOGOUT_URL,
+  redirectUri: env.SSO_REDIRECT_URI,
+  frontendUrl: env.SSO_FRONTEND_URL,
+  scope: 'openid profile email offline_access',
+  cookieName: 'sso_session',
+  sessionTtlSeconds: 7 * 24 * 3600,
+  cookieSecure: env.NODE_ENV === 'production',
+};
+
+export const ssoCore = new SsoCore(validateConfig(cfg), new RedisSessionStore());
+export const ssoHandlers = createSsoHandlers(ssoCore, cfg);
+export const ssoHook = createSsoHook(ssoCore, cfg);
+```
+
+### 2. Rutas `/auth/*`
+
+```ts
+// src/routes/auth/login/+server.ts
+import { ssoHandlers } from '$lib/server/auth';
+export const GET = ssoHandlers.login;
+
+// src/routes/auth/callback/+server.ts
+export const GET = ssoHandlers.callback;
+
+// src/routes/auth/session/+server.ts
+export const GET = ssoHandlers.session;
+
+// src/routes/auth/logout/+server.ts
+export const POST = ssoHandlers.logout;
+```
+
+### 3. Hook global
+
+```ts
+// src/hooks.server.ts
+export { ssoHook as handle } from '$lib/server/auth';
+```
+
+### 4. Proteger rutas
+
+No hay guard global: cada `+page.server.ts`/`+layout.server.ts` decide, leyendo
+`locals.user` que dejó el hook.
+
+```ts
+// src/routes/documents/+page.server.ts
+import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ locals }) => {
+  if (!locals.user) redirect(302, '/auth/login?returnTo=/documents');
+  return { user: locals.user };
+};
+```
+
+Declará el tipo en tu propia app (el package no aumenta `App.Locals` global para no pisar
+tu `app.d.ts`):
+
+```ts
+// src/app.d.ts
+import type { AuthenticatedUser } from '@hemia/auth';
+
+declare global {
+  namespace App {
+    interface Locals {
+      user?: AuthenticatedUser;
+    }
+  }
+}
+export {};
+```
 
 ---
 
