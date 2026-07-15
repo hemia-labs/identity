@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:frontend": "bun --cwd frontend dev",
-    "dev:backend": "bun --cwd backend start:dev",
+    "dev:web": "bun --cwd frontend dev",
+    "dev:api": "bun --cwd backend start:dev",
     "build": "bun --filter '*' build",
     "test": "bun --filter '*' test"
   }

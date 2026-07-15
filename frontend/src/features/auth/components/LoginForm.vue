@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toTypedSchema } from '@vee-validate/zod'
-import { Building2, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Mail, ShieldCheck } from 'lucide-vue-next'
+import { Eye, EyeOff, KeyRound, Loader2, Mail, ShieldCheck } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { GenericObject } from 'vee-validate'
@@ -30,10 +30,7 @@ async function submit(values: GenericObject) {
   authStore.markAuthenticated(result.session.sessionId)
 
   const returnTo = typeof route.query.returnTo === 'string' ? route.query.returnTo : null
-  await router.push({
-    path: '/account-selector',
-    query: returnTo ? { returnTo } : undefined,
-  })
+  await router.push(returnTo ? { path: '/consent', query: { returnTo } } : '/session')
 }
 </script>
 
@@ -42,12 +39,6 @@ async function submit(values: GenericObject) {
     <Alert v-if="errorMessage" variant="destructive">
       <AlertDescription>{{ errorMessage }}</AlertDescription>
     </Alert>
-
-    <div class="mx-auto flex w-fit items-center gap-3 rounded-full border border-[#dbe4f2] bg-[#f4f7fb] px-4 py-2 text-sm font-semibold text-[#182253] shadow-inner">
-      <Building2 class="h-5 w-5 text-[#667491]" />
-      <span>Organizacion: Hemia Technologies</span>
-      <CheckCircle2 class="h-5 w-5 text-[#35b97f]" />
-    </div>
 
     <FormField v-slot="{ componentField }" name="email">
       <FormItem>
@@ -89,7 +80,7 @@ async function submit(values: GenericObject) {
         <ShieldCheck class="mt-1 h-7 w-7 text-[#0f5cff]" />
         <div>
           <p class="text-base leading-7 text-[#182253]">
-            Tu inicio de sesion puede requerir MFA, seleccion de organizacion y autorizacion de permisos.
+            Tu inicio de sesion usa OAuth2/OIDC con cookies HttpOnly y puede requerir MFA.
           </p>
         </div>
       </div>

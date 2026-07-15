@@ -13,9 +13,6 @@ type JwtPayload = {
   email: string;
   username?: string | null;
   sessionId: string;
-  tenantId?: string | null;
-  organizationId?: string | null;
-  teamId?: string | null;
 };
 
 @Injectable()
@@ -52,9 +49,6 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       email: payload.email,
       username: payload.username,
       sessionId: payload.sessionId,
-      tenantId: session.tenantId,
-      organizationId: session.organizationId,
-      teamId: session.teamId,
     };
   }
 }

@@ -1,5 +1,5 @@
 import { SetMetadata, createParamDecorator, type ExecutionContext } from '@nestjs/common';
-import type { AuthenticatedUser } from '../core/index';
+import type { AccessContext, AuthenticatedUser } from '../core/index';
 
 /** Clave de metadatos fijada por {@link Public} y leída por {@link SsoAuthGuard}. */
 export const IS_PUBLIC_KEY = 'isPublic';
@@ -24,7 +24,11 @@ export interface RequestAuthContext {
 export type CurrentUserPayload = AuthenticatedUser & RequestAuthContext;
 
 /** Forma del request que pueblan el guard y el decorador. */
-type AuthedRequest = { user?: AuthenticatedUser; ssoAuth?: RequestAuthContext };
+type AuthedRequest = {
+  user?: AuthenticatedUser;
+  ssoAuth?: RequestAuthContext;
+  accessContext?: AccessContext;
+};
 
 /**
  * Decorador de parámetro que inyecta el usuario autenticado más el contexto de auth
@@ -37,4 +41,9 @@ export const CurrentUser = createParamDecorator(
     if (!req.user) return undefined;
     return { ...req.user, ...(req.ssoAuth as RequestAuthContext) };
   },
+);
+
+export const CurrentAccessContext = createParamDecorator(
+  (_d: unknown, ctx: ExecutionContext): AccessContext | undefined =>
+    ctx.switchToHttp().getRequest<AuthedRequest>().accessContext,
 );

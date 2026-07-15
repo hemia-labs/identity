@@ -53,6 +53,9 @@ export class UserEntity {
   @Column({ name: 'avatar_url', type: 'varchar', length: 2048, nullable: true })
   avatarUrl?: string | null;
 
+  @Column({ name: 'email_verified', default: false })
+  emailVerified: boolean;
+
   @Column({
     type: 'enum',
     enum: UserStatus,

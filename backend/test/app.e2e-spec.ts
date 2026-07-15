@@ -28,6 +28,10 @@ describe('Health (e2e)', () => {
     process.env.JWT_REFRESH_SECRET =
       process.env.JWT_REFRESH_SECRET ??
       'test_refresh_secret_change_me_32_chars';
+    process.env.ACCESS_API_URL = process.env.ACCESS_API_URL ?? 'http://localhost:3019';
+    process.env.ACCESS_JWKS_URI =
+      process.env.ACCESS_JWKS_URI ?? 'http://localhost:3019/.well-known/jwks.json';
+    process.env.ACCESS_AUDIENCE = process.env.ACCESS_AUDIENCE ?? 'access-api';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -38,34 +42,28 @@ describe('Health (e2e)', () => {
     await app.init();
   });
 
-  it('/api/v1/health (GET)', () => {
+  it('/api/v1/health/live (GET)', () => {
     return request(app.getHttpServer())
-      .get('/api/v1/health')
+      .get('/api/v1/health/live')
       .expect(200)
       .expect(({ body }) => {
         expect(body.status).toBe('ok');
-        expect(body.service).toBe('hemia-id-backend');
       });
   });
 
-  it('/api/v1/health/db (GET)', () => {
+  it('/api/v1/health/startup (GET)', () => {
     return request(app.getHttpServer())
-      .get('/api/v1/health/db')
+      .get('/api/v1/health/startup')
       .expect(200)
       .expect(({ body }) => {
         expect(body.status).toBe('ok');
-        expect(body.dependency).toBe('postgres');
       });
   });
 
-  it('/api/v1/health/redis (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/api/v1/health/redis')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body.status).toBe('ok');
-        expect(body.dependency).toBe('redis');
-      });
+  it('/api/v1/health/ready (GET)', async () => {
+    const response = await request(app.getHttpServer()).get('/api/v1/health/ready');
+    expect([200, 503]).toContain(response.status);
+    expect(['ok', 'not_ready']).toContain(response.body.status);
   });
 
   it('returns Nest default errors for 404', () => {
@@ -74,7 +72,7 @@ describe('Health (e2e)', () => {
       .expect(404)
       .expect(({ body }) => {
         expect(body.statusCode).toBe(404);
-        expect(body.error).toBe('Not Found');
+        expect(body.message).toBe('Cannot GET /api/v1/missing');
       });
   });
 

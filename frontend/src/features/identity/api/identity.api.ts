@@ -3,7 +3,6 @@ import type {
   ApproveOAuthConsentResponse,
   AuthSession,
   OAuthConsentRequest,
-  SessionAccount,
 } from '@/features/identity/types/api.types'
 
 export type LoginInput = {
@@ -42,17 +41,6 @@ export function resetPassword(input: { token: string; password: string }) {
   return fetchJson('/auth/reset-password', {
     method: 'POST',
     body: input,
-  })
-}
-
-export function listAccounts() {
-  return fetchJson<SessionAccount[]>('/accounts')
-}
-
-export function switchAccount(accountIndex: number) {
-  return fetchJson<{ account: SessionAccount; session: AuthSession }>('/accounts/switch', {
-    method: 'POST',
-    body: { accountIndex },
   })
 }
 

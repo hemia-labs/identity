@@ -10,7 +10,7 @@ export const envValidationSchema = Joi.object({
   PORT: Joi.number().port().default(3000),
   APP_CORS_ORIGINS: Joi.string()
     .allow('')
-    .default('http://localhost:5173,http://localhost:3001'),
+    .default('http://localhost:5173,http://localhost:3019'),
   APP_ISSUER: Joi.string().uri().default('https://id.hemia.cloud'),
   ID_FRONTEND_URL: Joi.string().uri().required(),
   AUTH_ALLOWED_REDIRECT_URIS: Joi.string()
@@ -45,9 +45,9 @@ export const envValidationSchema = Joi.object({
     otherwise: Joi.string().allow('').default(''),
   }),
   EMAIL_FROM_APP: Joi.string().default('Hemia ID'),
-  EMAIL_INVITATION_ACCEPT_URL: Joi.string().uri().default(
-    'http://localhost:5173/invitations/accept',
-  ),
+  ACCESS_API_URL: Joi.string().uri().required(),
+  ACCESS_JWKS_URI: Joi.string().uri().required(),
+  ACCESS_AUDIENCE: Joi.string().default('access-api'),
 
   JWT_ACCESS_SECRET: Joi.string()
     .min(32)

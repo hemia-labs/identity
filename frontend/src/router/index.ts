@@ -38,20 +38,6 @@ const router = createRouter({
       component: () => import('@/pages/auth/MfaChallengePage.vue'),
     },
     {
-      path: '/accounts',
-      redirect: '/account-selector',
-    },
-    {
-      path: '/account-selector',
-      name: 'account-selector',
-      component: () => import('@/pages/selection/AccountSelectorPage.vue'),
-    },
-    {
-      path: '/select-organization',
-      name: 'select-organization',
-      component: () => import('@/pages/selection/SelectOrganizationPage.vue'),
-    },
-    {
       path: '/authorize',
       redirect: '/consent',
     },
@@ -64,6 +50,11 @@ const router = createRouter({
       path: '/logout',
       name: 'logout',
       component: () => import('@/pages/system/LogoutPage.vue'),
+    },
+    {
+      path: '/session',
+      name: 'session',
+      component: () => import('@/pages/system/SessionPage.vue'),
     },
     {
       path: '/session-expired',

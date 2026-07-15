@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { decodeJwt } from 'jose';
 import { UnauthorizedError } from './errors';
+import { AccessClient } from './access-client';
 import { buildPkce } from './pkce';
 import { createVerifier, claimsToUser } from './jwks';
 import type { SsoConfig } from './config';
@@ -39,12 +40,14 @@ const shouldRefresh = (expiresAt: string) =>
  */
 export class SsoCore {
   private readonly verifyAccessToken: (token: string) => Promise<SsoClaims>;
+  private readonly accessClient?: AccessClient;
 
   constructor(
     private readonly cfg: SsoConfig,
     private readonly store: SessionStore,
   ) {
     this.verifyAccessToken = createVerifier(cfg);
+    this.accessClient = cfg.access ? new AccessClient(cfg) : undefined;
   }
 
   /**
@@ -169,6 +172,13 @@ export class SsoCore {
     if (this.cfg.onUserResolved)
       user.internalUserId = (await this.cfg.onUserResolved(user)).internalUserId;
 
+    const accessToken = this.accessClient
+      ? await this.accessClient.exchangeUserToken(tokens.access_token)
+      : undefined;
+    const accessContext = accessToken
+      ? await this.accessClient?.getContext(accessToken)
+      : undefined;
+
     const expiresAt = claims.exp
       ? new Date(claims.exp * 1000).toISOString()
       : new Date(Date.now() + (tokens.expires_in ?? 900) * 1000).toISOString();
@@ -176,6 +186,7 @@ export class SsoCore {
     return {
       id: existingId ?? randomUUID(),
       user,
+      accessContext,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresAt,

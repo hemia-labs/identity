@@ -1,15 +1,47 @@
-# identity
-Sistema centralizado de identidad, autenticacion, autorizacion, sesiones, tenants y permisos para el ecosistema de Hemia.
+# Hemia ID
+Proveedor central de identidad para el ecosistema Hemia: autenticacion, sesiones, OAuth2/OIDC, JWKS, usuarios y cuentas.
+
+Hemia ID ya no administra tenants, organizations, memberships, roles, permisos ni invitaciones. Ese dominio vive en [Hemia Access](../access/README.md), segun el [Plan de Migracion Identity + Access](../docs/migracion/plan-migracion-identity-access.md) y el [ADR](../docs/ADR/documentoADR.md).
 
 ## Resumen
 
 Este repositorio contiene los servicios de Hemia ID:
 
-- `backend`: API NestJS para login, sesiones, SSO interno, OAuth/OIDC, Google login, tenants, roles y permisos.
-- `frontend`: interfaz web para consumir y administrar la identidad central.
-- `auth-gateway`: referencia funcional previa para autenticacion con Google.
+- `backend`: API NestJS para login, sesiones, OAuth2/OIDC, Google login, token exchange, JWKS y administracion de usuarios/OAuth clients.
+- `frontend`: interfaz web para login, consentimiento, sesion y perfil basico.
+- `packages/auth`: SDK `@hemia/auth` v1 para consumidores OAuth/OIDC + contexto de Access.
 
-## Consumir el SSO (OAuth2 / OIDC)
+## Separacion Identity / Access
+
+- Identity autentica y emite tokens sin claims organizacionales (`tenant_id`, roles, permissions u organization).
+- Access autoriza: organizations, memberships, roles globales, permisos globales, invitaciones, productos y context tokens.
+- Los productos resuelven `iss + sub` contra Access mediante `@hemia/auth` y `AccessClient`.
+- No existe capa legacy: sin `legacy_tenant_mapping`, claims de transicion ni endpoints puente.
+
+## Corte por ambiente
+
+El corte es big bang por ambiente. No hay migracion de datos: las bases nuevas se crean vacias y se recrean con seeds.
+
+```bash
+# 1) Identity
+cd identity/backend
+bun run migration:run
+bun run seed:run
+
+# 2) Access, despues de obtener el user_id admin sembrado en Identity
+cd ../../access/apps/api
+bun run migration:run
+bun run seed:run
+```
+
+Reglas:
+
+- `synchronize: true` y `migrationsRun: true` estan prohibidos.
+- Migraciones y seeds se ejecutan manualmente, nunca en el arranque.
+- `/health/ready` queda not ready con `pending_migrations` hasta aplicar migraciones pendientes.
+- Las sesiones y refresh tokens anteriores al corte quedan invalidados; los usuarios vuelven a iniciar sesion.
+
+## Consumir Identity (OAuth2 / OIDC)
 
 Hemia ID es un proveedor OAuth2 + OpenID Connect. Un cliente se integra con el
 flujo **Authorization Code + PKCE** (PKCE es obligatorio para todos los clientes).
@@ -101,8 +133,10 @@ Antes de integrarse, el cliente debe estar dado de alta en Hemia ID. Datos que n
 - **En cada login:** generar PKCE (`code_verifier`/`code_challenge`) y `state`/`nonce`.
 - **Para validar tokens:** el `issuer`, el `jwks_uri` y su `aud`.
 
-> Servicio-a-servicio (sin usuario): usar `grant_type=client_credentials` con un cliente `confidential` (`client_id` + `client_secret` + `scope`).
+> Servicio-a-servicio (sin usuario): usar `grant_type=client_credentials` con un cliente `confidential` (`client_id` + `client_secret` + `scope`). Para Access en nombre de un usuario, usar token exchange hacia `aud=access-api`.
 
 ## Documentacion
 
 - [Backend README](./backend/README.md)
+- [Plan de Migracion](../docs/migracion/plan-migracion-identity-access.md)
+- [ADR](../docs/ADR/documentoADR.md)

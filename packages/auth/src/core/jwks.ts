@@ -4,9 +4,6 @@ import type { SsoConfig } from './config';
 import type { SsoClaims, AuthenticatedUser } from './types';
 
 const stringClaim = (v: unknown): string => (typeof v === 'string' ? v : '');
-const stringArrayClaim = (v: unknown): string[] =>
-  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-const uniqueStrings = (v: string[]): string[] => [...new Set(v)];
 
 /**
  * Proyecta los claims crudos del JWT sobre el {@link AuthenticatedUser} normalizado,
@@ -14,14 +11,10 @@ const uniqueStrings = (v: string[]): string[] => [...new Set(v)];
  */
 export function claimsToUser(payload: SsoClaims): AuthenticatedUser {
   return {
-    ssoUserId: String(payload.sub ?? ''),
+    sub: String(payload.sub ?? ''),
+    iss: stringClaim(payload.iss),
     email: stringClaim(payload.email),
     name: stringClaim(payload.name),
-    tenantId: stringClaim(payload.tenant_id),
-    organizationId: stringClaim(payload.organization_id),
-    teamId: stringClaim(payload.team_id),
-    roles: stringArrayClaim(payload.roles),
-    permissions: uniqueStrings(stringArrayClaim(payload.permissions)),
   };
 }
 

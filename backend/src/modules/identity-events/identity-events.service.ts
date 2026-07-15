@@ -8,9 +8,6 @@ import {
 
 type EmitIdentityEventInput = {
   type: IdentityEventType;
-  tenantId?: string | null;
-  organizationId?: string | null;
-  teamId?: string | null;
   userId?: string | null;
   payload: Record<string, unknown>;
 };
@@ -27,7 +24,6 @@ export class IdentityEventsService {
   }
 
   findRecent(options: {
-    tenantId?: string;
     type?: IdentityEventType;
     after?: Date;
     limit?: number;
@@ -36,12 +32,6 @@ export class IdentityEventsService {
       .createQueryBuilder('event')
       .orderBy('event.createdAt', 'DESC')
       .limit(Math.min(options.limit ?? 100, 500));
-
-    if (options.tenantId) {
-      query.andWhere('event.tenant_id = :tenantId', {
-        tenantId: options.tenantId,
-      });
-    }
 
     if (options.type) {
       query.andWhere('event.type = :type', { type: options.type });

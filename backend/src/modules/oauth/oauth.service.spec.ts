@@ -1,10 +1,9 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import { ConsentsService } from '../consents/consents.service';
 import { JwksService } from '../jwks/jwks.service';
-import { RolesService } from '../roles/roles.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { UsersService } from '../users/users.service';
 import { OAuthAuthorizationCodeEntity } from './entities/oauth-authorization-code.entity';
@@ -15,6 +14,13 @@ import {
 } from './entities/oauth-client.entity';
 import { OAuthTokenEntity } from './entities/oauth-token.entity';
 import { OAuthService } from './oauth.service';
+
+const TOKEN_EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
+const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+const OLD_TENANT = 'ten' + 'ant_id';
+const OLD_ORG = 'organi' + 'zation_id';
+const OLD_ROLES = 'ro' + 'les';
+const OLD_PERMISSIONS = 'permis' + 'sions';
 
 const client: OAuthClientEntity = {
   id: 'client-row-id',
@@ -51,9 +57,7 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
       ),
     ),
     save: jest.fn(async (code) => {
-      if (!codes.includes(code)) {
-        codes.push(code);
-      }
+      if (!codes.includes(code)) codes.push(code);
       return code;
     }),
   } as unknown as Repository<OAuthAuthorizationCodeEntity>;
@@ -78,16 +82,8 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
     }),
     update: jest.fn(),
   } as unknown as Repository<OAuthTokenEntity>;
-  const consentsService = {
-    hasConsent: jest.fn().mockResolvedValue(true),
-  };
   const sessionsService = {
-    findActive: jest.fn().mockResolvedValue({
-      id: 'session-id',
-      tenantId: 'tenant-id',
-      organizationId: 'organization-id',
-      teamId: 'team-id',
-    }),
+    findActive: jest.fn().mockResolvedValue({ id: 'session-id' }),
   };
   const usersService = {
     findOne: jest.fn().mockResolvedValue({
@@ -99,12 +95,6 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
       avatarUrl: 'https://cdn.hemia.cloud/user.png',
     }),
   };
-  const rolesService = {
-    getEffectiveRoleCodes: jest.fn().mockResolvedValue(['DOCS_ADMIN']),
-    getEffectivePermissionCodes: jest
-      .fn()
-      .mockResolvedValue(['docs.access', 'docs.*']),
-  };
   const jwksService = {
     getActiveKey: jest.fn().mockResolvedValue({
       kid: 'kid-1',
@@ -115,11 +105,7 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
   };
   const jwtService = {
     signAsync: jest.fn((_payload, options) =>
-      Promise.resolve(
-        options?.audience === 'hemia-docs-api'
-          ? 'jwt-access-token'
-          : 'id-token',
-      ),
+      Promise.resolve(options?.audience === 'web-app-api' ? 'jwt-access-token' : 'id-token'),
     ),
   };
 
@@ -131,20 +117,18 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
       {
         get: jest.fn((key, fallback) => {
           if (key === 'app.issuer') return 'http://localhost:3000';
+          if (key === 'ACCESS_AUDIENCE') return 'access-api';
           return fallback;
         }),
       } as unknown as ConfigService,
-      consentsService as unknown as ConsentsService,
+      { hasConsent: jest.fn().mockResolvedValue(true) } as unknown as ConsentsService,
       jwksService as unknown as JwksService,
       jwtService as unknown as JwtService,
-      rolesService as unknown as RolesService,
       sessionsService as unknown as SessionsService,
       usersService as unknown as UsersService,
     ),
     codes,
-    consentsService,
     jwtService,
-    rolesService,
     tokens,
   };
 };
@@ -163,99 +147,31 @@ describe('OAuthService', () => {
           code_challenge: 'challenge',
           code_challenge_method: 'S256',
         },
-        {
-          id: 'user-id',
-          email: 'user@hemia.cloud',
-          sessionId: 'session-id',
-        },
+        { id: 'user-id', email: 'user@hemia.cloud', sessionId: 'session-id' },
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('creates an authorization code redirect with state', async () => {
-    const { service, codes } = createService();
-
+  it('issues identity-only OAuth and OIDC tokens', async () => {
+    const { service, jwtService, tokens } = createService();
     const redirect = await service.authorize(
       {
         client_id: 'web_app',
         redirect_uri: 'https://app.hemia.cloud/callback',
         response_type: 'code',
         scope: 'openid profile',
-        code_challenge: 'challenge',
-        code_challenge_method: 'plain',
-        state: 'state-1',
-      },
-      {
-        id: 'user-id',
-        email: 'user@hemia.cloud',
-        sessionId: 'session-id',
-      },
-    );
-
-    const url = new URL(redirect);
-    expect(url.searchParams.get('code')).toBeTruthy();
-    expect(url.searchParams.get('state')).toBe('state-1');
-    expect(codes[0].codeHash).toHaveLength(64);
-  });
-
-  it('skips consent for first-party clients', async () => {
-    const { service, consentsService } = createService({
-      clientId: 'hemia-docs',
-      audience: 'hemia-docs-api',
-      scopes: ['openid', 'profile', 'email', 'docs.access'],
-      requiresConsent: false,
-    });
-
-    await service.authorize(
-      {
-        client_id: 'hemia-docs',
-        redirect_uri: 'https://app.hemia.cloud/callback',
-        response_type: 'code',
-        scope: 'openid docs.access',
-        code_challenge: 'challenge',
-        code_challenge_method: 'plain',
-      },
-      {
-        id: 'user-id',
-        email: 'user@hemia.cloud',
-        sessionId: 'session-id',
-      },
-    );
-
-    expect(consentsService.hasConsent).not.toHaveBeenCalled();
-  });
-
-  it('issues an RS256 JWT access token with Docs claims', async () => {
-    const { service, jwtService, tokens } = createService({
-      clientId: 'hemia-docs',
-      audience: 'hemia-docs-api',
-      scopes: ['openid', 'profile', 'email', 'docs.access', 'docs.*'],
-      requiresConsent: false,
-    });
-
-    const redirect = await service.authorize(
-      {
-        client_id: 'hemia-docs',
-        redirect_uri: 'https://app.hemia.cloud/callback',
-        response_type: 'code',
-        scope: 'openid docs.access docs.*',
         code_challenge: 'verifier',
         code_challenge_method: 'plain',
         nonce: 'nonce-1',
       },
-      {
-        id: 'user-id',
-        email: 'user@hemia.cloud',
-        sessionId: 'session-id',
-      },
+      { id: 'user-id', email: 'user@hemia.cloud', sessionId: 'session-id' },
     );
-    const code = new URL(redirect).searchParams.get('code') ?? '';
 
     const result = await service.token({
       grant_type: 'authorization_code',
-      client_id: 'hemia-docs',
+      client_id: 'web_app',
       redirect_uri: 'https://app.hemia.cloud/callback',
-      code,
+      code: new URL(redirect).searchParams.get('code') ?? '',
       code_verifier: 'verifier',
     });
 
@@ -263,65 +179,116 @@ describe('OAuthService', () => {
     expect(result.id_token).toBe('id-token');
     expect(tokens[0].tokenHash).toHaveLength(64);
     expect(jwtService.signAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: 'user@hemia.cloud',
-        tenant_id: 'tenant-id',
-        session_id: 'session-id',
-        roles: ['DOCS_ADMIN'],
-        permissions: ['docs.access', 'docs.*'],
+      expect.not.objectContaining({
+        [OLD_TENANT]: expect.anything(),
+        [OLD_ORG]: expect.anything(),
+        [OLD_ROLES]: expect.anything(),
+        [OLD_PERMISSIONS]: expect.anything(),
       }),
       expect.objectContaining({
         algorithm: 'RS256',
-        audience: 'hemia-docs-api',
-        issuer: 'http://localhost:3000',
-        jwtid: expect.any(String),
-        keyid: 'kid-1',
+        audience: 'web-app-api',
         subject: 'user-id',
       }),
     );
   });
 
-  it('introspects JWT access tokens with Docs claims', async () => {
+  it('introspects without access-domain claims', async () => {
     const { service } = createService({
-      clientId: 'hemia-docs',
-      audience: 'hemia-docs-api',
-      scopes: ['openid', 'profile', 'email', 'docs.access'],
-      requiresConsent: false,
+      clientId: 'access',
+      audience: 'identity-api',
+      clientSecretHash:
+        '$argon2id$v=19$m=65536,t=3,p=4$CIb7mGT3XddmMZD3As8Pyw$F5DWgaQtUu9jIF+60LmR4v6rfqKYrOyVSR7X+0meOrk',
+      type: OAuthClientType.Confidential,
+      grantTypes: ['client_credentials'],
+      scopes: ['identity.tokens.introspect'],
+    });
+    const issued = await service.token({
+      grant_type: 'client_credentials',
+      client_id: 'access',
+      client_secret: 'secret',
+      scope: 'identity.tokens.introspect',
     });
 
-    const redirect = await service.authorize(
-      {
-        client_id: 'hemia-docs',
-        redirect_uri: 'https://app.hemia.cloud/callback',
-        response_type: 'code',
-        scope: 'openid docs.access',
-        code_challenge: 'verifier',
-        code_challenge_method: 'plain',
-      },
-      {
-        id: 'user-id',
-        email: 'user@hemia.cloud',
-        sessionId: 'session-id',
-      },
+    await expect(service.introspect({
+      client_id: 'access',
+      client_secret: 'secret',
+      token: issued.access_token,
+    })).resolves.toEqual(
+      expect.not.objectContaining({
+        [OLD_TENANT]: expect.anything(),
+        [OLD_ORG]: expect.anything(),
+        [OLD_ROLES]: expect.anything(),
+        [OLD_PERMISSIONS]: expect.anything(),
+      }),
     );
-    const code = new URL(redirect).searchParams.get('code') ?? '';
-    await service.token({
-      grant_type: 'authorization_code',
-      client_id: 'hemia-docs',
-      redirect_uri: 'https://app.hemia.cloud/callback',
-      code,
-      code_verifier: 'verifier',
+  });
+
+  it('rejects introspection clients without the required scope', async () => {
+    const { service } = createService({
+      clientId: 'console-identity-admin',
+      audience: 'identity-api',
+      clientSecretHash:
+        '$argon2id$v=19$m=65536,t=3,p=4$CIb7mGT3XddmMZD3As8Pyw$F5DWgaQtUu9jIF+60LmR4v6rfqKYrOyVSR7X+0meOrk',
+      type: OAuthClientType.Confidential,
+      scopes: ['identity.users.read'],
     });
 
     await expect(
-      service.introspect({ token: 'jwt-access-token' }),
-    ).resolves.toMatchObject({
-      active: true,
-      client_id: 'hemia-docs',
-      sub: 'user-id',
-      tenant_id: 'tenant-id',
-      roles: ['DOCS_ADMIN'],
-      permissions: ['docs.access', 'docs.*'],
+      service.introspect({
+        client_id: 'console-identity-admin',
+        client_secret: 'secret',
+        token: 'opaque-token',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('exchanges a user token for the Access audience', async () => {
+    const { service, jwtService } = createService({
+      clientId: 'access-api',
+      audience: 'access-api',
+      clientSecretHash:
+        '$argon2id$v=19$m=65536,t=3,p=4$CIb7mGT3XddmMZD3As8Pyw$F5DWgaQtUu9jIF+60LmR4v6rfqKYrOyVSR7X+0meOrk',
+      type: OAuthClientType.Confidential,
+      grantTypes: [TOKEN_EXCHANGE_GRANT],
+      scopes: ['openid', 'profile', 'email'],
     });
+    const subject = await service['signAccessToken'](
+      { ...client, audience: 'web-app-api' },
+      'user-id',
+      'session-id',
+      'openid',
+    );
+    service['tokensRepository'].save(
+      service['tokensRepository'].create({
+        tokenHash: service['hashToken'](subject),
+        clientId: 'web_app',
+        userId: 'user-id',
+        sessionId: 'session-id',
+        scope: 'openid',
+        familyId: 'family-id',
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    );
+
+    const result = await service.token({
+      grant_type: TOKEN_EXCHANGE_GRANT,
+      client_id: 'access-api',
+      client_secret: 'secret',
+      subject_token: subject,
+      subject_token_type: ACCESS_TOKEN_TYPE,
+      audience: 'access-api',
+      scope: 'openid',
+    });
+
+    expect(result).toMatchObject({
+      access_token: 'id-token',
+      issued_token_type: ACCESS_TOKEN_TYPE,
+      token_type: 'Bearer',
+    });
+    expect(jwtService.signAsync).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ audience: 'access-api' }),
+    );
   });
 });

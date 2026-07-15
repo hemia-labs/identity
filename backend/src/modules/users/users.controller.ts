@@ -6,91 +6,106 @@ import {
   Param,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
-import { Permissions } from '../../common/decorators/permissions.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
-import { TenantGuard } from '../../common/guards/tenant.guard';
+import type { Request } from 'express';
+import { AdminAction } from '../../common/decorators/admin-action.decorator';
+import { IdentityAdminGuard } from '../../common/guards/identity-admin.guard';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateUserDto } from './dtos/update-user.dto';
 import { UserStatus } from './entities/user.entity';
 import { UsersService } from './users.service';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+@UseGuards(IdentityAdminGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Permissions('users.create')
-  async create(@Body() dto: CreateUserDto) {
-    const user = await this.usersService.create(dto);
+  @AdminAction('identity.users.create')
+  async create(
+    @Req() request: Request & { adminActorClientId?: string },
+    @Body() dto: CreateUserDto,
+  ) {
+    const user = await this.usersService.create(dto, request.adminActorClientId);
     return this.usersService.toPublicUser(user);
   }
 
   @Get()
-  @Permissions('users.read')
-  async findAll(@CurrentTenant() tenantId: string) {
-    const users = await this.usersService.findAll(tenantId);
+  @AdminAction('identity.users.read')
+  async findAll() {
+    const users = await this.usersService.findAll();
     return users.map((user) => this.usersService.toPublicUser(user));
   }
 
   @Get(':id')
-  @Permissions('users.read')
-  async findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    const user = await this.usersService.findOne(id, tenantId);
+  @AdminAction('identity.users.read')
+  async findOne(@Param('id') id: string) {
+    const user = await this.usersService.findOne(id);
     return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id')
-  @Permissions('users.update')
+  @AdminAction('identity.users.update')
   async update(
-    @CurrentTenant() tenantId: string,
+    @Req() request: Request & { adminActorClientId?: string },
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
   ) {
-    const user = await this.usersService.update(id, dto, tenantId);
+    const user = await this.usersService.update(id, dto, request.adminActorClientId);
     return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id/status')
-  @Permissions('users.update')
+  @AdminAction('identity.users.update')
   async updateStatus(
-    @CurrentTenant() tenantId: string,
+    @Req() request: Request & { adminActorClientId?: string },
     @Param('id') id: string,
     @Body('status') status: UserStatus,
   ) {
-    const user = await this.usersService.updateStatus(id, status, tenantId);
+    const user = await this.usersService.updateStatus(
+      id,
+      status,
+      request.adminActorClientId,
+    );
     return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id/lock')
-  @Permissions('users.lock')
-  async lock(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+  @AdminAction('identity.users.lock')
+  async lock(
+    @Req() request: Request & { adminActorClientId?: string },
+    @Param('id') id: string,
+  ) {
     const user = await this.usersService.updateStatus(
       id,
       UserStatus.Locked,
-      tenantId,
+      request.adminActorClientId,
     );
     return this.usersService.toPublicUser(user);
   }
 
   @Patch(':id/unlock')
-  @Permissions('users.unlock')
-  async unlock(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+  @AdminAction('identity.users.unlock')
+  async unlock(
+    @Req() request: Request & { adminActorClientId?: string },
+    @Param('id') id: string,
+  ) {
     const user = await this.usersService.updateStatus(
       id,
       UserStatus.Active,
-      tenantId,
+      request.adminActorClientId,
     );
     return this.usersService.toPublicUser(user);
   }
 
   @Delete(':id')
-  @Permissions('users.delete')
-  remove(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.usersService.remove(id, tenantId);
+  @AdminAction('identity.users.delete')
+  remove(
+    @Req() request: Request & { adminActorClientId?: string },
+    @Param('id') id: string,
+  ) {
+    return this.usersService.remove(id, request.adminActorClientId);
   }
 }
