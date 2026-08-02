@@ -1,4 +1,4 @@
-import { generateKeyPairSync, createPublicKey } from 'crypto';
+import { generateKeyPairSync, createPublicKey, randomBytes } from 'crypto';
 import argon2 from 'argon2';
 import { DataSource, QueryRunner } from 'typeorm';
 
@@ -192,7 +192,24 @@ async function seedOAuthClients(queryRunner: QueryRunner) {
       'role.read',
       'role.assign',
       'role.revoke',
+      'product_access.read',
+      'product_access.enable',
+      'product_access.suspend',
+      'product_access.disable',
+      'policy.read',
+      'policy.manage',
+      'audit.read',
     ],
+  });
+
+  await upsertClient(queryRunner, {
+    clientId: 'billing-legal-service',
+    audience: 'legal-api',
+    type: 'confidential',
+    secretHash: await clientSecretHash(queryRunner, 'billing-legal-service'),
+    redirectUris: [],
+    grantTypes: ['client_credentials'],
+    scopes: ['legal.documents.read', 'legal.acceptances.read'],
   });
 
   for (const client of systemClients) {
@@ -274,7 +291,15 @@ async function clientSecretHash(queryRunner: QueryRunner, clientId: string) {
   if (existing?.client_secret_hash) return existing.client_secret_hash as string;
 
   const envName = `OAUTH_CLIENT_SECRET_${clientId.replace(/-/g, '_').toUpperCase()}`;
-  const secret = process.env[envName];
-  if (!secret) throw new Error(`${envName} is required for a new OAuth client`);
+  const secret = process.env[envName] ?? generateClientSecret(clientId, envName);
   return argon2.hash(secret, { type: argon2.argon2id });
+}
+
+function generateClientSecret(clientId: string, envName: string) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${envName} is required for a new OAuth client`);
+  }
+  const secret = randomBytes(32).toString('base64url');
+  console.log(JSON.stringify({ client_id: clientId, secret }));
+  return secret;
 }
