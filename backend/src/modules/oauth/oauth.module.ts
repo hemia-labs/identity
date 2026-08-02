@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { ConsentsModule } from '../consents/consents.module';
 import { JwksModule } from '../jwks/jwks.module';
-import { RolesModule } from '../roles/roles.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { UsersModule } from '../users/users.module';
 import { OAuthAuthorizationCodeEntity } from './entities/oauth-authorization-code.entity';
@@ -24,7 +23,6 @@ import { OAuthService } from './oauth.service';
     AuthModule,
     ConsentsModule,
     JwksModule,
-    RolesModule,
     SessionsModule,
     UsersModule,
   ],

@@ -5,7 +5,7 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { SsoCore, type SsoConfig } from '../core/index';
+import { SsoCore, type AccessContext, type SsoConfig } from '../core/index';
 import { SSO_CONFIG } from './tokens';
 import { IS_PUBLIC_KEY, type RequestAuthContext } from './decorators';
 import type { Request } from 'express';
@@ -36,6 +36,7 @@ export class SsoAuthGuard implements CanActivate {
       Request & {
         user?: unknown;
         ssoAuth?: RequestAuthContext;
+        accessContext?: AccessContext;
         cookies?: Record<string, string>;
       }
     >();
@@ -43,6 +44,7 @@ export class SsoAuthGuard implements CanActivate {
     // getSession lanza si falta el id; tras él, `cookie` es un string válido.
     const session = await this.core.getSession(cookie);
     req.user = session.user;
+    req.accessContext = session.accessContext;
     req.ssoAuth = {
       accessToken: session.accessToken,
       cookie: cookie as string,

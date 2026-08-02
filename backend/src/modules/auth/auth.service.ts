@@ -49,9 +49,6 @@ export class AuthService {
 
     this.assertUserCanLogin(user);
 
-    // ponytail: tenant context is set via AccountsService.switchAccount, which
-    // validates membership. Login stays tenant-agnostic so it can't bind a
-    // session to a tenant the user isn't a member of.
     const refreshToken = this.createOpaqueToken();
     const refreshTokenHash = this.hashToken(refreshToken);
     const refreshExpiresAt = this.getDateFromDuration(
@@ -76,7 +73,7 @@ export class AuthService {
     return {
       accessToken: await this.signAccessToken(user, session.id),
       refreshToken,
-      session: this.toAuthSession(user, session.id, null, session.expiresAt),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -106,12 +103,7 @@ export class AuthService {
     return {
       accessToken: await this.signAccessToken(user, session.id),
       refreshToken,
-      session: this.toAuthSession(
-        user,
-        session.id,
-        null,
-        session.expiresAt,
-      ),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -199,24 +191,9 @@ export class AuthService {
     });
 
     return {
-      accessToken: await this.signAccessToken(
-        user,
-        session.id,
-        session.tenantId,
-        session.organizationId,
-        session.teamId,
-      ),
+      accessToken: await this.signAccessToken(user, session.id),
       refreshToken: nextRefreshToken,
-      session: this.toAuthSession(
-        user,
-        session.id,
-        session.tenantId,
-        session.expiresAt,
-        {
-          organizationId: session.organizationId,
-          teamId: session.teamId,
-        },
-      ),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -237,16 +214,7 @@ export class AuthService {
     }
 
     const user = await this.usersService.findOne(session.userId);
-    return this.toAuthSession(
-      user,
-      session.id,
-      session.tenantId,
-      session.expiresAt,
-      {
-        organizationId: session.organizationId,
-        teamId: session.teamId,
-      },
-    );
+    return this.toAuthSession(user, session.id, session.expiresAt);
   }
 
   async issueAccessTokenForSession(sessionId: string) {
@@ -258,23 +226,8 @@ export class AuthService {
     const user = await this.usersService.findOne(session.userId);
 
     return {
-      accessToken: await this.signAccessToken(
-        user,
-        session.id,
-        session.tenantId,
-        session.organizationId,
-        session.teamId,
-      ),
-      session: this.toAuthSession(
-        user,
-        session.id,
-        session.tenantId,
-        session.expiresAt,
-        {
-          organizationId: session.organizationId,
-          teamId: session.teamId,
-        },
-      ),
+      accessToken: await this.signAccessToken(user, session.id),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -307,9 +260,6 @@ export class AuthService {
   private signAccessToken(
     user: UserEntity,
     sessionId: string,
-    tenantId?: string | null,
-    organizationId?: string | null,
-    teamId?: string | null,
   ) {
     const options: JwtSignOptions = {
       subject: user.id,
@@ -325,9 +275,6 @@ export class AuthService {
         email: user.email,
         username: user.username,
         sessionId,
-        tenantId,
-        organizationId,
-        teamId,
       },
       options,
     );
@@ -336,12 +283,7 @@ export class AuthService {
   private toAuthSession(
     user: UserEntity,
     sessionId: string,
-    tenantId: string | null | undefined,
     expiresAt: Date,
-    context?: {
-      organizationId?: string | null;
-      teamId?: string | null;
-    },
   ) {
     return {
       user: {
@@ -352,9 +294,6 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         status: user.status,
       },
-      tenantId: tenantId ?? null,
-      organizationId: context?.organizationId ?? null,
-      teamId: context?.teamId ?? null,
       sessionId,
       expiresAt,
     };

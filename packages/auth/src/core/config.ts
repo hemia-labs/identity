@@ -43,6 +43,12 @@ export interface SsoConfig {
     scopes: string;
   };
 
+  access?: {
+    apiBaseUrl: string;
+    jwksUrl: string;
+    audience: string;
+  };
+
   /**
    * Control de autorización propio de la app, ejecutado durante la creación de la sesión.
    * Devuelve `false` para rechazar el login (p. ej. el usuario no tiene un permiso de la app).

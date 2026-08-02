@@ -1,7 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { SsoCore } from '../core/sso-core';
 import type { SsoConfig } from '../core/config';
-import type { AuthenticatedUser } from '../core/types';
+import type { AccessContext, AuthenticatedUser } from '../core/types';
 
 /**
  * `Handle` de `hooks.server.ts`: resuelve la cookie de sesión y expone el usuario en
@@ -14,11 +14,17 @@ import type { AuthenticatedUser } from '../core/types';
  */
 export function createSsoHook(core: SsoCore, cfg: SsoConfig): Handle {
   return async ({ event, resolve }) => {
-    const locals = event.locals as { user?: AuthenticatedUser };
+    const locals = event.locals as {
+      user?: AuthenticatedUser;
+      accessContext?: AccessContext;
+    };
     try {
-      locals.user = (await core.getSession(event.cookies.get(cfg.cookieName))).user;
+      const session = await core.getSession(event.cookies.get(cfg.cookieName));
+      locals.user = session.user;
+      locals.accessContext = session.accessContext;
     } catch {
       locals.user = undefined;
+      locals.accessContext = undefined;
     }
     return resolve(event);
   };

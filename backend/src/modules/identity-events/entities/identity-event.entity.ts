@@ -11,32 +11,21 @@ export enum IdentityEventType {
   UserUpdated = 'user.updated',
   UserSuspended = 'user.suspended',
   UserDeleted = 'user.deleted',
-  InvitationAccepted = 'invitation.accepted',
-  TeamMemberAdded = 'team.member.added',
-  TeamMemberRemoved = 'team.member.removed',
-  OrgMemberAdded = 'org.member.added',
-  OrgMemberRemoved = 'org.member.removed',
+  LoginSucceeded = 'auth.login_succeeded',
+  LoginFailed = 'auth.login_failed',
+  TokenIssued = 'auth.token_issued',
+  SessionRevoked = 'auth.session_revoked',
 }
 
 @Entity('identity_events')
 @Index('IDX_identity_events_type', ['type'])
 @Index('IDX_identity_events_created_at', ['createdAt'])
-@Index('IDX_identity_events_tenant_id', ['tenantId'])
 export class IdentityEventEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'enum', enum: IdentityEventType })
   type: IdentityEventType;
-
-  @Column({ name: 'tenant_id', type: 'uuid', nullable: true })
-  tenantId?: string | null;
-
-  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
-  organizationId?: string | null;
-
-  @Column({ name: 'team_id', type: 'uuid', nullable: true })
-  teamId?: string | null;
 
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId?: string | null;

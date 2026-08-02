@@ -1,11 +1,11 @@
 import { AppDataSource } from '../../../data-source';
-import { seed999SuperAdminRolesPermissions } from './999-seed-super-admin-roles-permissions';
+import { seedInitialIdentity } from './001-initial-identity';
 
 async function runSeeds() {
   await AppDataSource.initialize();
 
   try {
-    await seed999SuperAdminRolesPermissions(AppDataSource);
+    await seedInitialIdentity(AppDataSource);
   } finally {
     await AppDataSource.destroy();
   }

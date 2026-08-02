@@ -623,9 +623,9 @@ POST https://id.hemia.cloud/oauth/introspect
 Content-Type: application/json
 
 {
-  "client_id": "partner_dashboard",
-  "client_secret": "plain_client_secret_if_confidential",
-  "token": "token_to_check"
+  "client_id": "access",
+  "client_secret": "<secret>",
+  "token": "<token-a-validar>"
 }
 ```
 

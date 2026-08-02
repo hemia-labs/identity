@@ -28,6 +28,7 @@ export class OidcService {
         'authorization_code',
         'refresh_token',
         'client_credentials',
+        'urn:ietf:params:oauth:grant-type:token-exchange',
       ],
       subject_types_supported: ['public'],
       id_token_signing_alg_values_supported: ['RS256'],

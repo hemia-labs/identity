@@ -6,9 +6,6 @@ import { SessionEntity } from './entities/session.entity';
 
 type CreateSessionInput = {
   userId: string;
-  tenantId?: string | null;
-  organizationId?: string | null;
-  teamId?: string | null;
   refreshTokenHash: string;
   deviceName?: string | null;
   ipAddress?: string | null;
@@ -53,18 +50,6 @@ export class SessionsService {
 
   async updateRefreshHash(id: string, refreshTokenHash: string) {
     await this.sessionsRepository.update(id, { refreshTokenHash });
-  }
-
-  async updateActiveContext(
-    id: string,
-    context: {
-      tenantId: string;
-      organizationId?: string | null;
-      teamId?: string | null;
-    },
-  ) {
-    await this.sessionsRepository.update(id, context);
-    return this.findActive(id);
   }
 
   async revoke(id: string) {

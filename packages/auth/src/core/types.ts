@@ -3,11 +3,6 @@ export interface SsoClaims {
   sub?: string;
   email?: unknown;
   name?: unknown;
-  tenant_id?: unknown;
-  organization_id?: unknown;
-  team_id?: unknown;
-  roles?: unknown;
-  permissions?: unknown;
   /** Expiración como timestamp UNIX en segundos. */
   exp?: number;
   nonce?: unknown;
@@ -16,22 +11,43 @@ export interface SsoClaims {
 
 /** Vista normalizada del principal autenticado, orientada a la app. */
 export interface AuthenticatedUser {
-  ssoUserId: string;
+  sub: string;
+  iss?: string;
   email: string;
   name: string;
-  tenantId: string;
-  organizationId: string;
-  teamId: string;
-  roles: string[];
-  permissions: string[];
   /** Id de usuario propio de la app, poblado por el hook de configuración `onUserResolved`. */
   internalUserId?: string;
+}
+
+export interface AccessOrganizationContext {
+  organization_id: string;
+  organization_code: string;
+  organization_name: string;
+  organization_status: string;
+  membership_id: string;
+  membership_status: string;
+  context_version: number;
+  roles: string[];
+  permissions: string[];
+  product?: unknown;
+}
+
+export interface AccessContext {
+  identity: {
+    issuer: string;
+    subject_id: string;
+    type: string;
+    identity_reference_id: string;
+  };
+  organizations: AccessOrganizationContext[];
 }
 
 /** Sesión de login persistida, indexada por {@link Session.id} en el {@link SessionStore}. */
 export interface Session {
   id: string;
   user: AuthenticatedUser;
+  accessContext?: AccessContext;
+  contextToken?: string;
   accessToken: string;
   refreshToken?: string;
   /** Expiración del access token como cadena ISO 8601. */
@@ -46,6 +62,7 @@ export interface TokenResponse {
   /** Vida del token en segundos. */
   expires_in?: number;
   token_type?: string;
+  issued_token_type?: string;
 }
 
 /** Estado PKCE transitorio guardado entre `/auth/login` y `/auth/callback`. */

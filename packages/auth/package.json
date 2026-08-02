@@ -1,6 +1,6 @@
 {
   "name": "@hemia/auth",
-  "version": "0.0.7",
+  "version": "1.0.0",
   "description": "Cliente reutilizable de SSO OAuth/OIDC de Hemia: core en TS puro + adapter NestJS.",
   "license": "MIT",
   "author": "Hemia",

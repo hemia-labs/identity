@@ -4,25 +4,15 @@ import {
   forgotPassword,
   getOAuthConsentRequest,
   getSession,
-  listAccounts,
   login,
   logout,
   resetPassword,
-  switchAccount,
 } from '@/features/identity/api/identity.api'
 
 export function useSessionQuery() {
   return useQuery({
     queryKey: ['session'],
     queryFn: getSession,
-    retry: false,
-  })
-}
-
-export function useAccountsQuery() {
-  return useQuery({
-    queryKey: ['accounts'],
-    queryFn: listAccounts,
     retry: false,
   })
 }
@@ -50,10 +40,6 @@ export function useResetPasswordMutation() {
 
 export function useLogoutMutation() {
   return useMutation({ mutationFn: logout })
-}
-
-export function useSwitchAccountMutation() {
-  return useMutation({ mutationFn: switchAccount })
 }
 
 export function useApproveOAuthConsentMutation() {
