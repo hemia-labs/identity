@@ -27,9 +27,14 @@ export interface SsoConfig {
   /** Scope OIDC base; la app añade los suyos (p. ej. `'docs.access'`). */
   scope: string;
 
+  /** Producto cuyo contexto debe resolver Access durante el login. */
+  productCode?: string;
+
   cookieName: string;
   sessionTtlSeconds: number;
   cookieSecure: boolean;
+  /** Exige un lock distribuido para refresh cuando la app escala horizontalmente. */
+  requireDistributedRefreshLock?: boolean;
 
   /**
    * Configuración servicio-a-servicio (client_credentials). Solo es obligatoria si la app

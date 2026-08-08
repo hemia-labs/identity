@@ -101,6 +101,11 @@ SsoModule.forRootAsync({
 })
 ```
 
+En despliegues con varias instancias, el `SessionStore` debe implementar `withLock` para
+serializar las operaciones de sesión —refresh y logout— por sesión. El core usa una cola local
+por `sessionId` como fallback; configura `requireDistributedRefreshLock: true` para fallar al
+arrancar si falta el lock distribuido.
+
 El guard expone:
 
 - `req.user`

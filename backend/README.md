@@ -30,7 +30,7 @@ Variables principales:
 ```env
 PORT=3000
 APP_ISSUER=https://id.hemia.cloud
-APP_CORS_ORIGINS=https://id.hemia.cloud,https://console.hemia.cloud
+APP_CORS_ORIGINS=https://id.hemia.cloud,https://billing.hemia.cloud,https://console.hemia.cloud,https://docs.hemia.cloud,https://legal.hemia.cloud
 
 DB_HOST=localhost
 DB_PORT=5432

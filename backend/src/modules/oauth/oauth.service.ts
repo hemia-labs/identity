@@ -100,6 +100,7 @@ export class OAuthService {
   }
 
   async token(dto: OAuthTokenDto) {
+    console.log(`token: `, dto.grant_type);
     if (dto.grant_type === 'authorization_code') {
       return this.exchangeAuthorizationCode(dto);
     }
@@ -122,8 +123,21 @@ export class OAuthService {
     });
 
     if (token) {
-      token.revokedAt = new Date();
-      await this.tokensRepository.save(token);
+      const revokedAt = new Date();
+      const result = await this.tokensRepository.update(
+        { familyId: token.familyId, revokedAt: IsNull() },
+        { revokedAt },
+      );
+      this.logger.log(
+        JSON.stringify({
+          event: 'oauth.family_revoked',
+          clientId: token.clientId,
+          sessionId: token.sessionId ?? null,
+          familyId: token.familyId,
+          affected: result.affected ?? 0,
+          timestamp: revokedAt.toISOString(),
+        }),
+      );
     }
 
     return { revoked: true };
@@ -246,8 +260,13 @@ export class OAuthService {
       code.codeChallenge,
       code.codeChallengeMethod,
     );
-    code.usedAt = new Date();
-    await this.codesRepository.save(code);
+    const consumed = await this.codesRepository.update(
+      { id: code.id, usedAt: IsNull() },
+      { usedAt: new Date() },
+    );
+    if (consumed.affected !== 1) {
+      throw new UnauthorizedException('Invalid authorization code');
+    }
 
     return this.issueUserTokens(
       client,
@@ -275,13 +294,25 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    if (previousToken.revokedAt) {
+    const revokedAt = new Date();
+    const consumed = await this.tokensRepository.update(
+      { id: previousToken.id, revokedAt: IsNull() },
+      { revokedAt },
+    );
+
+    if (consumed.affected !== 1) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'oauth.refresh_token_reuse',
+          clientId: client.clientId,
+          sessionId: previousToken.sessionId ?? null,
+          familyId: previousToken.familyId,
+          detectedAt: revokedAt.toISOString(),
+        }),
+      );
       await this.revokeFamily(previousToken.familyId);
       throw new UnauthorizedException('Refresh token reuse detected');
     }
-
-    previousToken.revokedAt = new Date();
-    await this.tokensRepository.save(previousToken);
 
     return this.issueUserTokens(
       client,
@@ -355,7 +386,7 @@ export class OAuthService {
         userId: subject.userId,
         sessionId: subject.sessionId,
         scope,
-        familyId: randomUUID(),
+        familyId: subject.familyId,
         expiresAt: new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000),
       }),
     );

@@ -8,4 +8,10 @@ export interface SessionStore {
   /** Guarda `value` bajo `key`, expirando tras `ttlSeconds`. */
   set<T>(key: string, value: T, ttlSeconds: number): Promise<void>;
   delete(key: string): Promise<void>;
+  /** Ejecuta una operación con exclusión mutua distribuida cuando el store la soporta. */
+  withLock?<T>(
+    key: string,
+    ttlSeconds: number,
+    callback: () => Promise<T>,
+  ): Promise<T>;
 }

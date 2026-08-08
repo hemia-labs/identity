@@ -19,9 +19,12 @@ export function createSsoHook(core: SsoCore, cfg: SsoConfig): Handle {
       accessContext?: AccessContext;
     };
     try {
-      const session = await core.getSession(event.cookies.get(cfg.cookieName));
-      locals.user = session.user;
-      locals.accessContext = session.accessContext;
+      const isLogout = event.url.pathname.replace(/\/+$/, '').endsWith('/auth/logout');
+      if (!isLogout) {
+        const session = await core.getSession(event.cookies.get(cfg.cookieName));
+        locals.user = session.user;
+        locals.accessContext = session.accessContext;
+      }
     } catch {
       locals.user = undefined;
       locals.accessContext = undefined;

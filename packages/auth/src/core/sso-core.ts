@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { decodeJwt } from 'jose';
-import { UnauthorizedError } from './errors';
+import { ConfigError, UnauthorizedError } from './errors';
 import { AccessClient } from './access-client';
 import { buildPkce } from './pkce';
 import { createVerifier, claimsToUser } from './jwks';
@@ -10,9 +10,11 @@ import type { Session, TokenResponse, PkceState, SsoClaims } from './types';
 
 const pkceKey = (state: string) => `sso:pkce:${state}`;
 const sessionKey = (id: string) => `sso:session:${id}`;
+const refreshLockKey = (id: string) => `sso:refresh:${id}`;
 
 /** Refresca una sesión estos milisegundos antes de que expire su access token. */
 const REFRESH_WINDOW_MS = 60_000;
+const REFRESH_LOCK_TTL_SECONDS = 30;
 
 /**
  * Devuelve un destino de redirección seguro: solo se permiten rutas relativas del mismo
@@ -23,6 +25,12 @@ const sanitizeReturnTo = (returnTo?: string): string | undefined =>
 
 const buildFrontendRedirect = (frontendUrl: string, returnTo?: string): string =>
   returnTo ? new URL(returnTo, frontendUrl).toString() : frontendUrl;
+
+type CallbackResult = {
+  session: Session;
+  redirectUrl: string;
+  cookieValue: string;
+};
 
 /** `true` cuando `expiresAt` (ISO) está a menos de {@link REFRESH_WINDOW_MS} de ahora. */
 const shouldRefresh = (expiresAt: string) =>
@@ -41,11 +49,19 @@ const shouldRefresh = (expiresAt: string) =>
 export class SsoCore {
   private readonly verifyAccessToken: (token: string) => Promise<SsoClaims>;
   private readonly accessClient?: AccessClient;
+  private readonly pendingRefreshes = new Map<string, Promise<Session>>();
+  private readonly localOperationTails = new Map<string, Promise<void>>();
+  private readonly pendingCallbacks = new Map<string, Promise<CallbackResult>>();
 
   constructor(
     private readonly cfg: SsoConfig,
     private readonly store: SessionStore,
   ) {
+    if (cfg.requireDistributedRefreshLock && !store.withLock) {
+      throw new ConfigError(
+        'SessionStore.withLock is required for distributed refresh protection',
+      );
+    }
     this.verifyAccessToken = createVerifier(cfg);
     this.accessClient = cfg.access ? new AccessClient(cfg) : undefined;
   }
@@ -89,13 +105,26 @@ export class SsoCore {
    * @throws {UnauthorizedError} si faltan parámetros o son inválidos, el estado expiró, o
    *   falló el intercambio/verificación de tokens.
    */
-  async completeCallback(code?: string, state?: string): Promise<{
-    session: Session;
-    redirectUrl: string;
-    cookieValue: string;
-  }> {
+  async completeCallback(code?: string, state?: string): Promise<CallbackResult> {
     if (!code || !state) throw new UnauthorizedError('Missing code or state');
 
+    const pending = this.pendingCallbacks.get(state);
+    if (pending) return pending;
+
+    const callback = this.completeCallbackOnce(code, state);
+    const tracked = callback.finally(() => {
+      if (this.pendingCallbacks.get(state) === tracked) {
+        this.pendingCallbacks.delete(state);
+      }
+    });
+    this.pendingCallbacks.set(state, tracked);
+    return tracked;
+  }
+
+  private async completeCallbackOnce(
+    code: string,
+    state: string,
+  ): Promise<CallbackResult> {
     const pkce = await this.store.get<PkceState>(pkceKey(state));
     await this.store.delete(pkceKey(state));
     if (!pkce) throw new UnauthorizedError('Invalid or expired state');
@@ -122,7 +151,9 @@ export class SsoCore {
     if (!sessionId) throw new UnauthorizedError('Missing session');
     const session = await this.store.get<Session>(sessionKey(sessionId));
     if (!session) throw new UnauthorizedError('Invalid session');
-    return shouldRefresh(session.expiresAt) ? this.refreshSession(session) : session;
+    return shouldRefresh(session.expiresAt)
+      ? this.refreshSessionOnce(session.id)
+      : session;
   }
 
   /**
@@ -131,12 +162,20 @@ export class SsoCore {
    * @returns Si algún token se revocó correctamente de forma remota.
    */
   async logout(sessionId?: string): Promise<{ revoked: boolean; logoutUrl?: string }> {
-    const session = sessionId
-      ? await this.store.get<Session>(sessionKey(sessionId))
-      : undefined;
+    if (!sessionId) {
+      return {
+        revoked: false,
+        ...(this.cfg.logoutUrl && { logoutUrl: this.cfg.logoutUrl }),
+      };
+    }
 
-    const revoked = await this.revokeAtSso(session ?? undefined);
-    if (sessionId) await this.store.delete(sessionKey(sessionId));
+    const revoked = await this.withSessionLock(sessionId, async () => {
+      const session = await this.store.get<Session>(sessionKey(sessionId));
+      const result = await this.revokeAtSso(session ?? undefined);
+      await this.store.delete(sessionKey(sessionId));
+      return result;
+    });
+
     return { revoked, ...(this.cfg.logoutUrl && { logoutUrl: this.cfg.logoutUrl }) };
   }
 
@@ -194,6 +233,50 @@ export class SsoCore {
   }
 
   /** Intercambia el refresh token por una sesión nueva, conservando el id de sesión. */
+  private refreshSessionOnce(sessionId: string): Promise<Session> {
+    const pending = this.pendingRefreshes.get(sessionId);
+    if (pending) return pending;
+
+    const refresh = this.withSessionLock(sessionId, async () => {
+      const session = await this.store.get<Session>(sessionKey(sessionId));
+      if (!session) throw new UnauthorizedError('Invalid session');
+      if (!shouldRefresh(session.expiresAt)) return session;
+      return this.refreshSession(session);
+    });
+
+    const tracked = refresh.finally(() => {
+      if (this.pendingRefreshes.get(sessionId) === tracked) {
+        this.pendingRefreshes.delete(sessionId);
+      }
+    });
+    this.pendingRefreshes.set(sessionId, tracked);
+    return tracked;
+  }
+
+  private withSessionLock<T>(sessionId: string, callback: () => Promise<T>): Promise<T> {
+    if (this.store.withLock) {
+      return this.store.withLock(
+        refreshLockKey(sessionId),
+        REFRESH_LOCK_TTL_SECONDS,
+        callback,
+      );
+    }
+
+    const previous = this.localOperationTails.get(sessionId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.localOperationTails.set(sessionId, current);
+
+    return previous.then(callback).finally(() => {
+      release();
+      if (this.localOperationTails.get(sessionId) === current) {
+        this.localOperationTails.delete(sessionId);
+      }
+    });
+  }
+
   private async refreshSession(session: Session): Promise<Session> {
     if (!session.refreshToken) {
       await this.store.delete(sessionKey(session.id));

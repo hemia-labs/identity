@@ -60,6 +60,19 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
       if (!codes.includes(code)) codes.push(code);
       return code;
     }),
+    update: jest.fn(async (where, values) => {
+      let affected = 0;
+      for (const code of codes) {
+        const matches =
+          (!where.id || code.id === where.id) &&
+          (where.usedAt === undefined || !code.usedAt);
+        if (matches) {
+          Object.assign(code, values);
+          affected += 1;
+        }
+      }
+      return { affected };
+    }),
   } as unknown as Repository<OAuthAuthorizationCodeEntity>;
   const tokensRepository = {
     create: jest.fn((input) => input),
@@ -71,6 +84,7 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
             (!condition.tokenHash || token.tokenHash === condition.tokenHash) &&
             (!condition.refreshTokenHash ||
               token.refreshTokenHash === condition.refreshTokenHash) &&
+            (!condition.id || token.id === condition.id) &&
             (!condition.clientId || token.clientId === condition.clientId) &&
             (condition.revokedAt === undefined || !token.revokedAt),
         ),
@@ -80,7 +94,20 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
       tokens.push(token);
       return token;
     }),
-    update: jest.fn(),
+    update: jest.fn(async (where, values) => {
+      let affected = 0;
+      for (const token of tokens) {
+        const matches =
+          (!where.id || token.id === where.id) &&
+          (!where.familyId || token.familyId === where.familyId) &&
+          (where.revokedAt === undefined || !token.revokedAt);
+        if (matches) {
+          Object.assign(token, values);
+          affected += 1;
+        }
+      }
+      return { affected };
+    }),
   } as unknown as Repository<OAuthTokenEntity>;
   const sessionsService = {
     findActive: jest.fn().mockResolvedValue({ id: 'session-id' }),
@@ -105,7 +132,9 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
   };
   const jwtService = {
     signAsync: jest.fn((_payload, options) =>
-      Promise.resolve(options?.audience === 'web-app-api' ? 'jwt-access-token' : 'id-token'),
+      Promise.resolve(
+        options?.audience === 'web-app-api' ? 'jwt-access-token' : 'id-token',
+      ),
     ),
   };
 
@@ -121,7 +150,9 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
           return fallback;
         }),
       } as unknown as ConfigService,
-      { hasConsent: jest.fn().mockResolvedValue(true) } as unknown as ConsentsService,
+      {
+        hasConsent: jest.fn().mockResolvedValue(true),
+      } as unknown as ConsentsService,
       jwksService as unknown as JwksService,
       jwtService as unknown as JwtService,
       sessionsService as unknown as SessionsService,
@@ -134,6 +165,179 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
 };
 
 describe('OAuthService', () => {
+  it('atomically rotates a refresh token', async () => {
+    const { service, tokens } = createService();
+    const refreshToken = 'refresh-token-0';
+    tokens.push({
+      id: 'oauth-token-0',
+      tokenHash: 'access-hash-0',
+      refreshTokenHash: service['hashToken'](refreshToken),
+      clientId: 'web_app',
+      userId: 'user-id',
+      sessionId: 'session-id',
+      scope: 'openid profile',
+      familyId: 'family-id',
+      expiresAt: new Date(Date.now() + 900_000),
+      revokedAt: null,
+      createdAt: new Date(),
+    });
+
+    const result = await service.token({
+      grant_type: 'refresh_token',
+      client_id: 'web_app',
+      refresh_token: refreshToken,
+    });
+
+    expect(result.refresh_token).toEqual(expect.any(String));
+    expect(tokens[0].revokedAt).toBeInstanceOf(Date);
+    expect(tokens.filter((token) => token.refreshTokenHash)).toHaveLength(2);
+    expect(tokens[1].familyId).toBe('family-id');
+  });
+
+  it('accepts only one concurrent refresh and rejects the second as reuse', async () => {
+    const { service, tokens } = createService();
+    const refreshToken = 'refresh-token-concurrent';
+    tokens.push({
+      id: 'oauth-token-concurrent',
+      tokenHash: 'access-hash-concurrent',
+      refreshTokenHash: service['hashToken'](refreshToken),
+      clientId: 'web_app',
+      userId: 'user-id',
+      sessionId: 'session-id',
+      scope: 'openid profile',
+      familyId: 'family-concurrent',
+      expiresAt: new Date(Date.now() + 900_000),
+      revokedAt: null,
+      createdAt: new Date(),
+    });
+
+    const results = await Promise.allSettled([
+      service.token({
+        grant_type: 'refresh_token',
+        client_id: 'web_app',
+        refresh_token: refreshToken,
+      }),
+      service.token({
+        grant_type: 'refresh_token',
+        client_id: 'web_app',
+        refresh_token: refreshToken,
+      }),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    expect(tokens.filter((token) => token.refreshTokenHash)).toHaveLength(2);
+  });
+
+  it('rejects sequential reuse and revokes the token family', async () => {
+    const { service, tokens } = createService();
+    const refreshToken = 'refresh-token-reuse';
+    tokens.push({
+      id: 'oauth-token-reuse',
+      tokenHash: 'access-hash-reuse',
+      refreshTokenHash: service['hashToken'](refreshToken),
+      clientId: 'web_app',
+      userId: 'user-id',
+      sessionId: 'session-id',
+      scope: 'openid profile',
+      familyId: 'family-reuse',
+      expiresAt: new Date(Date.now() + 900_000),
+      revokedAt: null,
+      createdAt: new Date(),
+    });
+
+    await service.token({
+      grant_type: 'refresh_token',
+      client_id: 'web_app',
+      refresh_token: refreshToken,
+    });
+
+    await expect(
+      service.token({
+        grant_type: 'refresh_token',
+        client_id: 'web_app',
+        refresh_token: refreshToken,
+      }),
+    ).rejects.toThrow('Refresh token reuse detected');
+
+    expect(
+      tokens
+        .filter((token) => token.familyId === 'family-reuse')
+        .every((token) => token.revokedAt),
+    ).toBe(true);
+  });
+
+  it('revokes the complete family for either an access or refresh token', async () => {
+    const { service, tokens } = createService();
+    const familyId = 'family-logout';
+    const accessToken = 'access-token-logout';
+    const refreshToken = 'refresh-token-logout';
+    tokens.push(
+      {
+        id: 'oauth-token-logout-0',
+        tokenHash: service['hashToken'](accessToken),
+        refreshTokenHash: service['hashToken'](refreshToken),
+        clientId: 'web_app',
+        userId: 'user-id',
+        sessionId: 'session-id',
+        scope: 'openid profile',
+        familyId,
+        expiresAt: new Date(Date.now() + 900_000),
+        revokedAt: null,
+        createdAt: new Date(),
+      },
+      {
+        id: 'oauth-token-logout-1',
+        tokenHash: 'access-hash-child',
+        refreshTokenHash: 'refresh-hash-child',
+        clientId: 'web_app',
+        userId: 'user-id',
+        sessionId: 'session-id',
+        scope: 'openid profile',
+        familyId,
+        expiresAt: new Date(Date.now() + 900_000),
+        revokedAt: null,
+        createdAt: new Date(),
+      },
+    );
+
+    await service.revoke({ token: accessToken });
+    expect(tokens.every((token) => token.revokedAt instanceof Date)).toBe(true);
+
+    const secondFamily = 'family-refresh-logout';
+    const secondRefreshToken = 'refresh-token-logout-2';
+    tokens.push({
+      id: 'oauth-token-refresh-logout',
+      tokenHash: 'access-hash-refresh',
+      refreshTokenHash: service['hashToken'](secondRefreshToken),
+      clientId: 'web_app',
+      userId: 'user-id',
+      sessionId: 'session-id',
+      scope: 'openid profile',
+      familyId: secondFamily,
+      expiresAt: new Date(Date.now() + 900_000),
+      revokedAt: null,
+      createdAt: new Date(),
+    });
+
+    await service.revoke({ token: secondRefreshToken });
+    expect(
+      tokens.filter((token) => token.familyId === secondFamily)[0].revokedAt,
+    ).toBeInstanceOf(Date);
+  });
+
+  it('keeps revocation idempotent when the token does not exist', async () => {
+    const { service } = createService();
+
+    await expect(service.revoke({ token: 'missing-token' })).resolves.toEqual({
+      revoked: true,
+    });
+  });
+
   it('rejects invalid redirect URIs', async () => {
     const { service } = createService();
 
@@ -193,6 +397,66 @@ describe('OAuthService', () => {
     );
   });
 
+  it('consumes an authorization code atomically under concurrent exchange', async () => {
+    const { service, tokens } = createService();
+    const redirect = await service.authorize(
+      {
+        client_id: 'web_app',
+        redirect_uri: 'https://app.hemia.cloud/callback',
+        response_type: 'code',
+        scope: 'openid profile',
+        code_challenge: 'verifier',
+        code_challenge_method: 'plain',
+      },
+      { id: 'user-id', email: 'user@hemia.cloud', sessionId: 'session-id' },
+    );
+    const code = new URL(redirect).searchParams.get('code') ?? '';
+    const request = {
+      grant_type: 'authorization_code' as const,
+      client_id: 'web_app',
+      redirect_uri: 'https://app.hemia.cloud/callback',
+      code,
+      code_verifier: 'verifier',
+    };
+
+    const results = await Promise.allSettled([
+      service.token(request),
+      service.token(request),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(tokens).toHaveLength(1);
+  });
+
+  it('keeps client credentials in independent token families', async () => {
+    const { service, tokens } = createService({
+      clientId: 'service-client',
+      audience: 'service-api',
+      clientSecretHash:
+        '$argon2id$v=19$m=65536,t=3,p=4$CIb7mGT3XddmMZD3As8Pyw$F5DWgaQtUu9jIF+60LmR4v6rfqKYrOyVSR7X+0meOrk',
+      type: OAuthClientType.Confidential,
+      grantTypes: ['client_credentials'],
+      scopes: ['service.read'],
+    });
+
+    await service.token({
+      grant_type: 'client_credentials',
+      client_id: 'service-client',
+      client_secret: 'secret',
+      scope: 'service.read',
+    });
+    await service.token({
+      grant_type: 'client_credentials',
+      client_id: 'service-client',
+      client_secret: 'secret',
+      scope: 'service.read',
+    });
+
+    expect(tokens).toHaveLength(2);
+    expect(tokens[0].familyId).not.toBe(tokens[1].familyId);
+  });
+
   it('introspects without access-domain claims', async () => {
     const { service } = createService({
       clientId: 'access',
@@ -210,11 +474,13 @@ describe('OAuthService', () => {
       scope: 'identity.tokens.introspect',
     });
 
-    await expect(service.introspect({
-      client_id: 'access',
-      client_secret: 'secret',
-      token: issued.access_token,
-    })).resolves.toEqual(
+    await expect(
+      service.introspect({
+        client_id: 'access',
+        client_secret: 'secret',
+        token: issued.access_token,
+      }),
+    ).resolves.toEqual(
       expect.not.objectContaining({
         [OLD_TENANT]: expect.anything(),
         [OLD_ORG]: expect.anything(),
@@ -243,8 +509,8 @@ describe('OAuthService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('exchanges a user token for the Access audience', async () => {
-    const { service, jwtService } = createService({
+  it('exchanges a user token into the same revocable family', async () => {
+    const { service, jwtService, tokens } = createService({
       clientId: 'access-api',
       audience: 'access-api',
       clientSecretHash:
@@ -259,7 +525,7 @@ describe('OAuthService', () => {
       'session-id',
       'openid',
     );
-    service['tokensRepository'].save(
+    await service['tokensRepository'].save(
       service['tokensRepository'].create({
         tokenHash: service['hashToken'](subject),
         clientId: 'web_app',
@@ -290,5 +556,11 @@ describe('OAuthService', () => {
       expect.any(Object),
       expect.objectContaining({ audience: 'access-api' }),
     );
+    expect(tokens).toHaveLength(2);
+    expect(tokens[1].familyId).toBe('family-id');
+    expect(tokens[1].refreshTokenHash).toBeUndefined();
+
+    await service.revoke({ token: subject });
+    expect(tokens.every((token) => token.revokedAt instanceof Date)).toBe(true);
   });
 });

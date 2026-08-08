@@ -1,6 +1,7 @@
 declare module '@sveltejs/kit' {
   export type Handle = (input: {
     event: {
+      url: URL;
       locals: Record<string, unknown>;
       cookies: { get(name: string): string | undefined };
     };

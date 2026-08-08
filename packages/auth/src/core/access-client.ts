@@ -34,9 +34,14 @@ export class AccessClient {
     return tokens.access_token;
   }
 
-  async getContext(accessToken: string): Promise<AccessContext> {
+  async getContext(
+    accessToken: string,
+    productCode = this.cfg.productCode,
+  ): Promise<AccessContext> {
     const access = this.requireAccessConfig();
-    const res = await fetch(new URL('/v1/me/context', access.apiBaseUrl), {
+    const url = new URL('/v1/me/context', access.apiBaseUrl);
+    if (productCode) url.searchParams.set('product', productCode);
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) throw new UnauthorizedError('Access context failed');
