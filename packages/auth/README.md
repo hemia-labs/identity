@@ -133,3 +133,39 @@ El hook escribe `locals.user` y `locals.accessContext`.
 - Usar `user.sub` + `user.iss` como referencia de identidad.
 - Resolver contexto global con `AccessClient`.
 - Resolver contexto y autorizacion especificos en el producto.
+
+## Cambios de la 1.0.8 frente a la 1.0.4
+
+Las versiones 1.0.5 a 1.0.7 se usaron en pruebas locales y no se publicaron en npm. Estas capacidades se entregan juntas en la 1.0.8.
+
+### Contexto de autorización de sistemas
+
+`AccessClient.resolveSystemContext(accessToken, { organization_id, product_code, audience })` solicita un contexto nuevo y verifica RS256/JWKS, `typ: hemia-context+jwt`, issuer igual a `access.apiBaseUrl` (sin slash final), audiencia escalar y vigencia sin tolerancia adicional. Conserva 401/403/409/503 mediante `AccessContextError`; no sustituye una resolución fallida por un token guardado. La aplicación valida además el contrato y el significado de las asignaciones de su producto. Los tokens permanecen server-side.
+
+El perfil Billing v1 no modifica el flujo OAuth de Identity ni la autorización organizacional propia de Access.
+
+### Contexto de sistema reutilizable
+
+`SystemContextCache(store).resolve(scope, fresh, loadVerified)` comparte contextos entre instancias mediante el `SessionStore` de servidor. Requiere `withLock` distribuido. `scope` contiene sessionId, issuer, subject, organizationId, membershipId, product y audience. El callback debe verificar firma y todos los claims del contrato/identidad del producto **antes de devolverlos**. No persistir un payload decodificado sin verificación.
+
+Para lecturas (`fresh=false`), la ventana es 60 segundos desde el inicio de resolución, limitada además por `iat + 60` y `exp`. No se prolonga al leer. Las mutaciones usan `fresh=true`, sin fallback y sin compartir una resolución anterior. Un error de resolución elimina la entrada previa. La sesión `sso:session:<id>` debe existir; logout impide reutilización aunque una entrada permanezca hasta su TTL.
+
+El consumidor de eventos llama `invalidate({organizationId, issuer?, subject?})` antes de confirmar el mensaje: con emisor/sujeto invalida esa identidad en la organización; sin ellos invalida toda la organización. Generaciones compartidas cercan resoluciones en curso y evitan restauración por eventos fuera de orden. Su retención de diez minutos excede ampliamente la ventana de 60 segundos y el presupuesto de resolución de 25 segundos. El consumidor mantiene la política existente de eliminación de sesiones.
+
+Caída de Access: solo se pueden servir lecturas con contexto aún válido y no invalidado. Redis inaccesible, contexto vencido o inválido: denegar. Revalidar permiso y alcance del recurso en cada petición. La pérdida de eventos puede demorar revocación de nuevas lecturas hasta 60 segundos. Las operaciones ya autorizadas no se cancelan. `exchangeUserToken` y resolución HTTP tienen timeout de cinco segundos cada una.
+
+### Empaquetado NestJS
+
+El adaptador NestJS importa el core publicado como módulo hermano en CJS y ESM. No duplica clases usadas como tokens DI: `SsoCore` y `AccessClient` tienen la misma identidad desde ambos entrypoints. Validación del artefacto: `bun run build && node test-built-nestjs.cjs`. Esto corrige el fallo de arranque detectado al levantar Billing durante la aceptación integrada.
+
+### Fallos de Access durante el login
+
+La consulta inicial de contexto tiene timeout de cinco segundos. Fallos de red,
+respuestas 5xx o JSON inválido producen `AccessContextError(503)`; 401/403 conservan
+su estado. Nest redirige con `error=access_unavailable`, `access_denied` o
+`auth_failed` y registra únicamente ese código cerrado, sin credenciales.
+El frontend debe presentar una página pública de error y reintento manual;
+redirigir automáticamente a SSO desde esa página genera un bucle.
+
+Verificación: `bun test`, `bun run typecheck`, `bun run build` y
+`node test-built-nestjs.cjs`.

@@ -9,3 +9,14 @@ export class UnauthorizedError extends Error {}
  * adaptador de NestJS la mapea a HTTP 500.
  */
 export class ConfigError extends Error {}
+
+/** Status-preserving system authorization failure; contains no tokens. */
+export class AccessContextError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AccessContextError";
+  }
+}

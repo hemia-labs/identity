@@ -18,3 +18,5 @@ hemia_id_console_integration.md
 hemia-auth-design.md
 AGENTS.md
 .codex/
+# Reproducible workspace dependencies
+!bun.lock

@@ -20,7 +20,10 @@ import {
 import { AccessAdminGuard } from './access-admin.guard';
 
 @Injectable()
-export class IdentityAdminGuard extends AuthGuard('jwt') implements CanActivate {
+export class IdentityAdminGuard
+  extends AuthGuard('jwt')
+  implements CanActivate
+{
   constructor(
     @InjectRepository(OAuthTokenEntity)
     private readonly tokensRepository: Repository<OAuthTokenEntity>,
@@ -38,6 +41,22 @@ export class IdentityAdminGuard extends AuthGuard('jwt') implements CanActivate 
     }
 
     await super.canActivate(context);
+    const request = context.switchToHttp().getRequest<
+      Request & {
+        user?: { id: string; sessionId: string };
+        delegatedAdminIdentity?: { userId: string; sessionId: string };
+      }
+    >();
+    const delegated = request.delegatedAdminIdentity;
+    if (
+      delegated &&
+      (request.user?.id !== delegated.userId ||
+        request.user?.sessionId !== delegated.sessionId)
+    ) {
+      throw new UnauthorizedException(
+        'Administrative token must match the authenticated session',
+      );
+    }
     return this.accessAdminGuard.canActivate(context);
   }
 
@@ -80,7 +99,26 @@ export class IdentityAdminGuard extends AuthGuard('jwt') implements CanActivate 
     }
 
     if (storedToken.userId || storedToken.sessionId) {
-      throw new UnauthorizedException('Invalid access token');
+      // A user token is never a machine credential. Authenticate its matching
+      // Identity cookie, then let Access authorize the administrator's action.
+      if (
+        !storedToken.userId ||
+        !storedToken.sessionId ||
+        !request.cookies?.access_token
+      ) {
+        throw new UnauthorizedException(
+          'Matching Identity session cookie required',
+        );
+      }
+      (
+        request as Request & {
+          delegatedAdminIdentity?: { userId: string; sessionId: string };
+        }
+      ).delegatedAdminIdentity = {
+        userId: storedToken.userId,
+        sessionId: storedToken.sessionId,
+      };
+      return false;
     }
 
     const client = await this.clientsRepository.findOne({

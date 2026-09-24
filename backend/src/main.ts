@@ -1,3 +1,5 @@
+import { installMetrics } from '@hemia/operational-metrics';
+import { DataSource } from 'typeorm';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { configureApp } from './app.bootstrap';
@@ -7,6 +9,10 @@ async function bootstrap() {
   const logger = new JsonLogger();
   const app = await NestFactory.create(AppModule);
   const { port } = configureApp(app, logger);
+  await installMetrics(app, {
+    service: 'identity',
+    dataSource: app.get(DataSource),
+  });
   await app.listen(port);
 }
 bootstrap();

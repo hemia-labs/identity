@@ -7,8 +7,9 @@ import {
   Res,
   Redirect,
   Inject,
+  Logger,
 } from '@nestjs/common';
-import { SsoCore, type SsoConfig } from '../core/index';
+import { AccessContextError, SsoCore, type SsoConfig } from '../core/index';
 import { SSO_CONFIG } from './tokens';
 import { Public } from './decorators';
 import type { Request, Response } from 'express';
@@ -58,8 +59,13 @@ export class SsoController {
       const { redirectUrl, cookieValue } = await this.core.completeCallback(code, state);
       res.cookie(this.cfg.cookieName, cookieValue, cookieOpts(this.cfg));
       return { statusCode: 302, url: redirectUrl };
-    } catch {
-      return { statusCode: 302, url: this.core.buildErrorRedirect() };
+    } catch (error) {
+      const reason = error instanceof AccessContextError
+        ? error.status === 503 ? 'access_unavailable' : 'access_denied'
+        : 'auth_failed';
+      // Closed codes only: never log exceptions, tokens, codes or callback URLs.
+      Logger.warn(`SSO callback failed: ${reason}`, 'SsoController');
+      return { statusCode: 302, url: this.core.buildErrorRedirect(reason) };
     }
   }
 

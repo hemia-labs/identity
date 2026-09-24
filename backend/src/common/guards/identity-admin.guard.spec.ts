@@ -30,7 +30,7 @@ const createGuard = (
 ) => {
   const tokensRepository = {
     findOne: jest.fn().mockResolvedValue(storedToken),
-  } as unknown as Repository<OAuthTokenEntity>;
+  };
   const clientsRepository = {
     findOne: jest.fn().mockResolvedValue({
       clientId: storedToken?.clientId,
@@ -41,20 +41,67 @@ const createGuard = (
   } as unknown as Repository<OAuthClientEntity>;
   const accessAdminGuard = {
     canActivate: jest.fn(),
-  } as unknown as AccessAdminGuard;
+  };
   const guard = new IdentityAdminGuard(
-    tokensRepository,
+    tokensRepository as unknown as Repository<OAuthTokenEntity>,
     clientsRepository,
     {
       getAllAndOverride: jest.fn().mockReturnValue('identity.users.read'),
     } as unknown as Reflector,
-    accessAdminGuard,
+    accessAdminGuard as unknown as AccessAdminGuard,
   );
 
   return { accessAdminGuard, guard, tokensRepository };
 };
 
 describe('IdentityAdminGuard', () => {
+  it.each([
+    ['user-id', 'session-id', true],
+    ['other-user', 'session-id', false],
+    ['user-id', 'other-session', false],
+  ])(
+    'binds administrative bearer to authenticated cookie %s/%s',
+    async (userId, sessionId, allowed) => {
+      const { guard, accessAdminGuard } = createGuard({
+        tokenHash,
+        clientId: 'access',
+        userId: 'user-id',
+        sessionId: 'session-id',
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      const request = {
+        headers: { authorization: `Bearer ${token}` },
+        cookies: { access_token: 'cookie' },
+        user: { id: userId, sessionId },
+      };
+      const context = {
+        getHandler: jest.fn(),
+        getClass: jest.fn(),
+        switchToHttp: () => ({ getRequest: () => request }),
+      } as never;
+      const passport = jest
+        .spyOn(
+          Object.getPrototypeOf(IdentityAdminGuard.prototype),
+          'canActivate',
+        )
+        .mockResolvedValue(true);
+      jest.mocked(accessAdminGuard.canActivate).mockResolvedValue(true);
+      try {
+        if (allowed) {
+          await expect(guard.canActivate(context)).resolves.toBe(true);
+          expect(accessAdminGuard.canActivate).toHaveBeenCalledWith(context);
+        } else {
+          await expect(guard.canActivate(context)).rejects.toThrow(
+            UnauthorizedException,
+          );
+          expect(accessAdminGuard.canActivate).not.toHaveBeenCalled();
+        }
+      } finally {
+        passport.mockRestore();
+      }
+    },
+  );
+
   it('allows active machine tokens with the required scope', async () => {
     const { accessAdminGuard, guard, tokensRepository } = createGuard({
       tokenHash,
@@ -114,7 +161,9 @@ describe('IdentityAdminGuard', () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
 
-    await expect(guard.canActivate(createContext())).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(createContext())).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('rejects machine tokens issued to another audience', async () => {
