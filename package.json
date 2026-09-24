@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "changeset": "changeset",
+    "version:auth": "node scripts/version-auth.mjs",
     "dev:web": "bun --cwd frontend dev",
     "dev:api": "bun --cwd backend start:dev",
     "build": "bun --filter '*' build",

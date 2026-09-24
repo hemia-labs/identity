@@ -32,8 +32,15 @@ jobs:
         with:
           bun-version: '1.3.14'
       - run: bun install --frozen-lockfile
-      - name: Verify Changesets on PRs
+      - run: node --test scripts/auth-release.test.mjs
+      - name: Identify a version-only PR
+        id: version-pr
         if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/auth-release.mjs classify "$BASE_SHA"
+      - name: Verify Changesets on PRs
+        if: github.event_name == 'pull_request' && steps.version-pr.outputs.release != 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bun run changeset status --since "$BASE_SHA"

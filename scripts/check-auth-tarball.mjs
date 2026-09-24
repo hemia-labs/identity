@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -53,6 +54,19 @@ assert.equal(typeof createSsoHook, 'function');
 `);
   run(process.execPath, ['check.cjs'], consumer);
   run(process.execPath, ['check.mjs'], consumer);
+  if (process.env.AUTH_RELEASE_DIR) {
+    const output = resolve(process.env.AUTH_RELEASE_DIR);
+    mkdirSync(output, { recursive: true });
+    const tarball = join(temporary, packed.filename);
+    copyFileSync(tarball, join(output, packed.filename));
+    writeFileSync(join(output, 'release.json'), JSON.stringify({
+      commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+      name: manifest.name,
+      version: manifest.version,
+      filename: packed.filename,
+      integrity: `sha512-${createHash('sha512').update(readFileSync(tarball)).digest('base64')}`,
+    }, null, 2) + '\n');
+  }
   console.log(`${manifest.name}@${manifest.version}: tarball and CJS/ESM exports PASS`);
 } finally {
   rmSync(temporary, { recursive: true, force: true });
