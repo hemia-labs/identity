@@ -23,8 +23,7 @@
       "require": { "types": "./dist/nestjs/index.d.ts",  "default": "./dist/nestjs/index.js" }
     },
     "./sveltekit": {
-      "import":  { "types": "./dist/sveltekit/index.d.mts", "default": "./dist/sveltekit/index.mjs" },
-      "require": { "types": "./dist/sveltekit/index.d.ts",  "default": "./dist/sveltekit/index.js" }
+      "import": { "types": "./dist/sveltekit/index.d.mts", "default": "./dist/sveltekit/index.mjs" }
     }
   },
   "files": ["dist"],

@@ -8,9 +8,13 @@
     "packages/*"
   ],
   "scripts": {
+    "changeset": "changeset",
     "dev:web": "bun --cwd frontend dev",
     "dev:api": "bun --cwd backend start:dev",
     "build": "bun --filter '*' build",
     "test": "bun --filter '*' test"
+  },
+  "devDependencies": {
+    "@changesets/cli": "2.31.1"
   }
 }
