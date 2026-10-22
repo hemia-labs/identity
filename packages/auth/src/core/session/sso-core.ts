@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { decodeJwt } from 'jose';
-import { ConfigError, UnauthorizedError } from './errors';
-import { AccessClient } from './access-client';
-import { buildPkce } from './pkce';
-import { createVerifier, claimsToUser } from './jwks';
-import type { SsoConfig } from './config';
+import { ConfigError, UnauthorizedError } from '../errors';
+import { AccessClient } from '../clients/access-client';
+import { buildPkce } from '../pkce';
+import { createVerifier, claimsToUser } from '../jwks';
+import type { SsoConfig } from '../config';
 import type { SessionStore } from './store';
-import type { Session, TokenResponse, PkceState, SsoClaims } from './types';
+import type { Session, TokenResponse, PkceState, SsoClaims } from '../types';
 
 const pkceKey = (state: string) => `sso:pkce:${state}`;
 const sessionKey = (id: string) => `sso:session:${id}`;

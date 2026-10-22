@@ -38,7 +38,8 @@ export interface SsoConfig {
 
   /**
    * Configuración servicio-a-servicio (client_credentials). Solo es obligatoria si la app
-   * usa {@link SsoClient}. Las credenciales recurren por defecto a `clientId`/`clientSecret`
+   * usa {@link SsoClient}. Para integraciones sin login usar MachineClient.
+   * Las credenciales recurren por defecto a `clientId`/`clientSecret`
    * del login.
    */
   service?: {

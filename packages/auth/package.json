@@ -1,6 +1,6 @@
 {
   "name": "@hemia/auth",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Cliente reutilizable de SSO OAuth/OIDC de Hemia: core en TS puro + adapter NestJS.",
   "license": "MIT",
   "author": "Hemia",
@@ -9,32 +9,58 @@
     "url": "git+https://github.com/hemia-labs/identity.git",
     "directory": "packages/auth"
   },
-  "keywords": ["sso", "oauth", "oidc", "pkce", "jwks", "nestjs", "auth"],
+  "keywords": [
+    "sso",
+    "oauth",
+    "oidc",
+    "pkce",
+    "jwks",
+    "nestjs",
+    "auth"
+  ],
   "main": "./dist/core/index.js",
   "types": "./dist/core/index.d.ts",
   "module": "./dist/core/index.mjs",
   "exports": {
     ".": {
-      "import":  { "types": "./dist/core/index.d.mts", "default": "./dist/core/index.mjs" },
-      "require": { "types": "./dist/core/index.d.ts",  "default": "./dist/core/index.js" }
+      "import": {
+        "types": "./dist/core/index.d.mts",
+        "default": "./dist/core/index.mjs"
+      },
+      "require": {
+        "types": "./dist/core/index.d.ts",
+        "default": "./dist/core/index.js"
+      }
     },
     "./nestjs": {
-      "import":  { "types": "./dist/nestjs/index.d.mts", "default": "./dist/nestjs/index.mjs" },
-      "require": { "types": "./dist/nestjs/index.d.ts",  "default": "./dist/nestjs/index.js" }
+      "import": {
+        "types": "./dist/nestjs/index.d.mts",
+        "default": "./dist/nestjs/index.mjs"
+      },
+      "require": {
+        "types": "./dist/nestjs/index.d.ts",
+        "default": "./dist/nestjs/index.js"
+      }
     },
     "./sveltekit": {
-      "import": { "types": "./dist/sveltekit/index.d.mts", "default": "./dist/sveltekit/index.mjs" }
+      "import": {
+        "types": "./dist/sveltekit/index.d.mts",
+        "default": "./dist/sveltekit/index.mjs"
+      }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test":  "bun test",
+    "test": "bun test ../../test/auth/unit",
+    "test:built": "node ../../test/auth/package/built-nestjs.cjs",
     "prepack": "npm run build"
   },
   "publishConfig": {
-     "access": "public"
+    "access": "public"
   },
   "dependencies": {
     "jose": "^5.0.0"
@@ -56,10 +82,20 @@
     "express": ">=4"
   },
   "peerDependenciesMeta": {
-    "@nestjs/common": { "optional": true },
-    "@nestjs/core": { "optional": true },
-    "@sveltejs/kit": { "optional": true },
-    "@types/express": { "optional": true },
-    "express": { "optional": true }
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@nestjs/core": {
+      "optional": true
+    },
+    "@sveltejs/kit": {
+      "optional": true
+    },
+    "@types/express": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    }
   }
 }

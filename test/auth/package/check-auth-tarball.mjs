@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
+const root = fileURLToPath(new URL('../../../', import.meta.url));
 const packageDir = join(root, 'packages/auth');
 const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
 const temporary = mkdtempSync(join(tmpdir(), 'hemia-auth-pack-'));

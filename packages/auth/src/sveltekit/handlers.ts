@@ -1,5 +1,5 @@
 import { redirect, isRedirect, json, type RequestEvent } from '@sveltejs/kit';
-import { SsoCore } from '../core/sso-core';
+import { SsoCore } from '../core/session/sso-core';
 import type { SsoConfig } from '../core/config';
 
 const cookieOpts = (cfg: SsoConfig) => ({

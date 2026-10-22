@@ -20,3 +20,18 @@ export class AccessContextError extends Error {
     this.name = "AccessContextError";
   }
 }
+
+/** Sanitized transport/token failure. Never contains provider bodies or secrets. */
+export class MachineClientError extends Error {
+  constructor(
+    public readonly stage: "token" | "request",
+    public readonly status?: number,
+  ) {
+    super(
+      stage === "token"
+        ? "Machine token request failed"
+        : "Machine API request failed",
+    );
+    this.name = "MachineClientError";
+  }
+}

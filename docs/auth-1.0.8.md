@@ -14,6 +14,6 @@ La guía de uso y las condiciones de invalidación están en [el README del paqu
 
 ## Verificación previa a publicar
 
-El workflow de CI ejecuta `bun install --frozen-lockfile`, `bun run --cwd packages/auth typecheck`, `bun run --cwd packages/auth test`, `bun run --cwd packages/auth build`, `node packages/auth/test-built-nestjs.cjs` y `node scripts/check-auth-tarball.mjs`. En PR comprueba además los Changesets frente a la rama base. El último comando empaqueta el build e instala el tarball en un consumidor temporal para verificar los exports CommonJS del core/NestJS y los exports ESM del core/NestJS/SvelteKit; no publica en npm.
+El workflow de CI ejecuta `bun install --frozen-lockfile`, `bun run --cwd packages/auth typecheck`, `bun run --cwd packages/auth test`, `bun run --cwd packages/auth build`, `node test/auth/package/built-nestjs.cjs` y `node test/auth/package/check-auth-tarball.mjs`. En PR comprueba además los Changesets frente a la rama base. El último comando empaqueta el build e instala el tarball en un consumidor temporal para verificar los exports CommonJS del core/NestJS y los exports ESM del core/NestJS/SvelteKit; no publica en npm.
 
 La activación y el orden de las PR de versión/publicación están en [la guía de release](auth-release.md).

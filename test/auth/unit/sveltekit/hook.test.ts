@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { createSsoHook } from './hook';
-import type { SsoConfig } from '../core/config';
+import { createSsoHook } from '../../../../packages/auth/src/sveltekit/hook';
+import type { SsoConfig } from '../../../../packages/auth/src/core/config';
 
 const config = {
   cookieName: 'session',

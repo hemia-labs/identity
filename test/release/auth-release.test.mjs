@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isReviewedVersionBatch, registryDecision } from './auth-release.mjs';
+import { isReviewedVersionBatch, registryDecision } from '../../scripts/auth-release.mjs';
 
 const versionFiles = [
   'packages/auth/package.json',
@@ -12,7 +12,7 @@ const versionFiles = [
 test('only a reviewed version batch can trigger publication', () => {
   assert.equal(isReviewedVersionBatch('1.0.8', '1.0.9', versionFiles), true);
   assert.equal(isReviewedVersionBatch('1.0.4', '1.0.8', [
-    ...versionFiles, 'packages/auth/src/core/access-client.ts',
+    ...versionFiles, 'packages/auth/src/core/clients/access-client.ts',
   ]), false);
   assert.equal(isReviewedVersionBatch('1.0.8', '1.0.9', versionFiles.filter((file) => file !== 'bun.lock')), false);
   assert.equal(isReviewedVersionBatch('1.0.8', '1.0.8', versionFiles), false);

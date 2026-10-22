@@ -1,5 +1,5 @@
 export { SsoModule, type SsoModuleAsyncOptions } from './sso.module';
-export { AccessClient } from '../core/access-client';
+export { AccessClient } from '../core/clients/access-client';
 export { SSO_CONFIG, SESSION_STORE } from './tokens';
 export { SsoAuthGuard } from './sso.guard';
 export {

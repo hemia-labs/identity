@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { SsoCore } from "./sso-core";
-import type { SsoConfig } from "./config";
-import type { Session, TokenResponse } from "./types";
-import type { SessionStore } from "./store";
-import { ConfigError } from "./errors";
+import { SsoCore } from "../../../../packages/auth/src/core/session/sso-core";
+import type { SsoConfig } from "../../../../packages/auth/src/core/config";
+import type { Session, TokenResponse } from "../../../../packages/auth/src/core/types";
+import type { SessionStore } from "../../../../packages/auth/src/core/session/store";
+import { ConfigError } from "../../../../packages/auth/src/core/errors";
 
 const config: SsoConfig = {
   issuer: "https://identity.example.com",

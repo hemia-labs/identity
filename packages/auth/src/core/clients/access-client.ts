@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { AccessContextError, ConfigError, UnauthorizedError } from "./errors";
-import type { SsoConfig } from "./config";
-import type { AccessContext, TokenResponse } from "./types";
+import { AccessContextError, ConfigError, UnauthorizedError } from "../errors";
+import type { SsoConfig } from "../config";
+import type { AccessContext, TokenResponse } from "../types";
 
 const TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
 const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";

@@ -2,8 +2,8 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import {
   SystemContextCache,
   type SystemContextScope,
-} from "./system-context-cache";
-import type { SessionStore } from "./store";
+} from "../../../../packages/auth/src/core/session/system-context-cache";
+import type { SessionStore } from "../../../../packages/auth/src/core/session/store";
 let now = 1_000_000;
 let clock: ReturnType<typeof spyOn>;
 afterEach(() => {

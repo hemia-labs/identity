@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { AccessContextError, ConfigError } from "./errors";
+import { AccessContextError, ConfigError } from "../errors";
 import type { SessionStore } from "./store";
 
 export const SYSTEM_CONTEXT_READ_WINDOW_SECONDS = 60;

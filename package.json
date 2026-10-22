@@ -13,7 +13,10 @@
     "dev:web": "bun --cwd frontend dev",
     "dev:api": "bun --cwd backend start:dev",
     "build": "bun --filter '*' build",
-    "test": "bun --filter '*' test"
+    "test": "bun run --cwd backend test && bun run --cwd packages/auth test && bun run --cwd frontend test --run && bun run test:release",
+    "test:release": "node --test test/release/auth-release.test.mjs",
+    "test:package": "bun run --cwd packages/auth build && node test/auth/package/built-nestjs.cjs",
+    "test:tarball": "node test/auth/package/check-auth-tarball.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1"

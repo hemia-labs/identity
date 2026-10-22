@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { SsoCore } from '../core/sso-core';
+import { SsoCore } from '../core/session/sso-core';
 import type { SsoConfig } from '../core/config';
 import type { AccessContext, AuthenticatedUser } from '../core/types';
 

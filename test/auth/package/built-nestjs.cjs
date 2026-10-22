@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
-const core = require("./dist/core");
-const nest = require("./dist/nestjs");
+const core = require("../../../packages/auth/dist/core");
+const nest = require("../../../packages/auth/dist/nestjs");
 const moduleDefinition = nest.SsoModule.forRootAsync({
   useFactoryConfig: () => ({}),
   store: { provide: nest.SESSION_STORE, useValue: {} },
@@ -21,8 +21,8 @@ console.log("Built NestJS/core DI class identity PASS");
     assert.equal(result.url, expected);
   }
   console.log('Callback closed error codes PASS');
-  const esmCore = await import('./dist/core/index.mjs');
-  const esmNest = await import('./dist/nestjs/index.mjs');
+  const esmCore = await import('../../../packages/auth/dist/core/index.mjs');
+  const esmNest = await import('../../../packages/auth/dist/nestjs/index.mjs');
   const esmModule = esmNest.SsoModule.forRootAsync({
     useFactoryConfig: () => ({}),
     store: { provide: esmNest.SESSION_STORE, useValue: {} },

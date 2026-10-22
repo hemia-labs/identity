@@ -18,16 +18,16 @@ import type { SsoConfig } from '@hemia/auth'
 
 const config: SsoConfig = validateConfig({
   issuer: 'https://id.hemia.cloud',
-  clientId: 'horus',
+  clientId: 'console',
   clientSecret: process.env.HEMIA_CLIENT_SECRET,
-  audience: 'horus-api',
+  audience: 'console-api',
   jwksUrl: 'https://id.hemia.cloud/.well-known/jwks.json',
   authorizationUrl: 'https://id.hemia.cloud/oauth/authorize',
   tokenUrl: 'https://id.hemia.cloud/oauth/token',
-  redirectUri: 'https://horus.hemia.cloud/auth/callback',
-  frontendUrl: 'https://horus.hemia.cloud',
+  redirectUri: 'https://console.hemia.cloud/auth/callback',
+  frontendUrl: 'https://console.hemia.cloud',
   scope: 'openid profile email offline_access',
-  cookieName: 'horus_session',
+  cookieName: 'console_session',
   sessionTtlSeconds: 7 * 24 * 3600,
   cookieSecure: true,
   access: {
@@ -156,7 +156,7 @@ Caída de Access: solo se pueden servir lecturas con contexto aún válido y no 
 
 ### Empaquetado NestJS
 
-El adaptador NestJS importa el core publicado como módulo hermano en CJS y ESM. No duplica clases usadas como tokens DI: `SsoCore` y `AccessClient` tienen la misma identidad desde ambos entrypoints. Validación del artefacto: `bun run build && node test-built-nestjs.cjs`. Esto corrige el fallo de arranque detectado al levantar Billing durante la aceptación integrada.
+El adaptador NestJS importa el core publicado como módulo hermano en CJS y ESM. No duplica clases usadas como tokens DI: `SsoCore` y `AccessClient` tienen la misma identidad desde ambos entrypoints. Validación del artefacto: `bun run build && bun run test:built`. Esto corrige el fallo de arranque detectado al levantar Billing durante la aceptación integrada.
 
 ### Fallos de Access durante el login
 
@@ -167,5 +167,5 @@ su estado. Nest redirige con `error=access_unavailable`, `access_denied` o
 El frontend debe presentar una página pública de error y reintento manual;
 redirigir automáticamente a SSO desde esa página genera un bucle.
 
-Verificación: `bun test`, `bun run typecheck`, `bun run build` y
-`node test-built-nestjs.cjs`.
+Verificación: `bun run test`, `bun run typecheck`, `bun run build` y
+`bun run test:built`.

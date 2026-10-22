@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
-import { AccessClient } from "./access-client";
-import type { SsoConfig } from "./config";
+import { AccessClient } from "../../../../packages/auth/src/core/clients/access-client";
+import type { SsoConfig } from "../../../../packages/auth/src/core/config";
 
 describe("system context verification", () => {
   let server: ReturnType<typeof Bun.serve>;
