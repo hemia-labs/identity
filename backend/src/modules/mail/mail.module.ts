@@ -12,15 +12,18 @@ import { MailTemplateManager } from './mail-template.manager';
       provide: EMAIL_SENDER_CLIENT,
       inject: [ConfigService],
       useFactory: (configService: ConfigService) =>
-        new EmailSender({
-          host: configService.getOrThrow<string>('email.host'),
-          port: configService.getOrThrow<number>('email.port'),
-          secure: configService.getOrThrow<boolean>('email.secure'),
-          auth: {
-            user: configService.getOrThrow<string>('email.user'),
-            pass: configService.getOrThrow<string>('email.pass'),
+        new EmailSender(
+          {
+            host: configService.getOrThrow<string>('email.host'),
+            port: configService.getOrThrow<number>('email.port'),
+            secure: configService.getOrThrow<boolean>('email.secure'),
+            auth: {
+              user: configService.getOrThrow<string>('email.user'),
+              pass: configService.getOrThrow<string>('email.pass'),
+            },
           },
-        }, MailTemplateManager),
+          MailTemplateManager,
+        ),
     },
     MailService,
   ],

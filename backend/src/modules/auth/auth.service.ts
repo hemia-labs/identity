@@ -11,11 +11,11 @@ import { RefreshTokensService } from '../refresh-tokens/refresh-tokens.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { UserEntity, UserStatus } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
-import { ChangePasswordDto } from './dtos/change-password.dto';
-import { ForgotPasswordDto } from './dtos/forgot-password.dto';
+import { ChangePasswordDto } from './dtos/password/change-password.dto';
+import { ForgotPasswordDto } from './dtos/password/forgot-password.dto';
 import { LoginDto } from './dtos/login.dto';
-import { ResetPasswordDto } from './dtos/reset-password.dto';
-import { OAuthStatePayload } from './types/oauth-state-payload.type';
+import { ResetPasswordDto } from './dtos/password/reset-password.dto';
+import { OAuthStatePayload } from './google/oauth-state-payload.type';
 
 type RequestMetadata = {
   ipAddress?: string | null;
@@ -236,14 +236,18 @@ export class AuthService {
   }
 
   forgotPassword(_dto: ForgotPasswordDto) {
+    void _dto;
     return { accepted: true };
   }
 
   resetPassword(_dto: ResetPasswordDto) {
+    void _dto;
     throw new BadRequestException('Password reset is not configured yet');
   }
 
   changePassword(_userId: string, _dto: ChangePasswordDto) {
+    void _userId;
+    void _dto;
     throw new BadRequestException('Password change is not configured yet');
   }
 
@@ -257,10 +261,7 @@ export class AuthService {
     }
   }
 
-  private signAccessToken(
-    user: UserEntity,
-    sessionId: string,
-  ) {
+  private signAccessToken(user: UserEntity, sessionId: string) {
     const options: JwtSignOptions = {
       subject: user.id,
       secret: this.configService.getOrThrow<string>('jwt.accessSecret'),
@@ -280,11 +281,7 @@ export class AuthService {
     );
   }
 
-  private toAuthSession(
-    user: UserEntity,
-    sessionId: string,
-    expiresAt: Date,
-  ) {
+  private toAuthSession(user: UserEntity, sessionId: string, expiresAt: Date) {
     return {
       user: {
         email: user.email,

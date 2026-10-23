@@ -18,7 +18,12 @@ export class OAuthTokenEntity {
   @Column({ name: 'token_hash', length: 64 })
   tokenHash: string;
 
-  @Column({ name: 'refresh_token_hash', type: 'varchar', length: 64, nullable: true })
+  @Column({
+    name: 'refresh_token_hash',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
   refreshTokenHash?: string | null;
 
   @Column({ name: 'client_id', length: 120 })
@@ -29,6 +34,9 @@ export class OAuthTokenEntity {
 
   @Column({ name: 'session_id', type: 'uuid', nullable: true })
   sessionId?: string | null;
+
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  audience?: string | null;
 
   @Column({ type: 'text' })
   scope: string;

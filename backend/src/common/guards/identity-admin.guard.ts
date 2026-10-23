@@ -127,7 +127,7 @@ export class IdentityAdminGuard
     if (
       !client ||
       client.status !== OAuthClientStatus.Active ||
-      client.audience !== 'identity-api'
+      storedToken.audience !== 'identity-api'
     ) {
       throw new UnauthorizedException('Invalid access token');
     }

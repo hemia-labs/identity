@@ -29,7 +29,7 @@ import {
 import { OAuthTokenEntity } from './entities/oauth-token.entity';
 
 const ACCESS_TOKEN_SECONDS = 900;
-const REFRESH_TOKEN_SECONDS = 2_592_000;
+const CLIENT_ACCESS_TOKEN_SECONDS = 600;
 const TOKEN_EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
 const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 
@@ -149,7 +149,15 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid introspection client');
     }
     await this.assertClientSecret(caller, dto.client_secret);
-    if (!caller.scopes.includes('identity.tokens.introspect')) {
+    if (
+      !(caller.serviceDestinations
+        ? caller.serviceDestinations.some(
+            (destination) =>
+              destination.audience === 'identity-api' &&
+              destination.scopes.includes('identity.tokens.introspect'),
+          )
+        : caller.scopes.includes('identity.tokens.introspect'))
+    ) {
       throw new ForbiddenException('Insufficient scope');
     }
 
@@ -169,7 +177,7 @@ export class OAuthService {
     if (!token.userId || !token.sessionId) {
       return {
         active: true,
-        aud: tokenClient.audience,
+        aud: token.audience,
         client_id: token.clientId,
         scope: token.scope,
         exp: Math.floor(token.expiresAt.getTime() / 1000),
@@ -335,10 +343,34 @@ export class OAuthService {
     }
 
     await this.assertClientSecret(client, dto.client_secret);
-    const requestedScope = dto.scope ?? client.scopes.join(' ');
-    this.assertScopesAllowed(client, requestedScope);
-
-    return this.issueClientToken(client, requestedScope);
+    if (!dto.scope?.trim()) throw new BadRequestException('scope is required');
+    const requestedScopes = [...new Set(this.parseScopes(dto.scope))];
+    let audience: string;
+    let allowedScopes: string[];
+    if (client.serviceDestinations) {
+      if (!dto.resource && !dto.audience)
+        throw new BadRequestException('resource is required');
+      const destination = client.serviceDestinations.find(
+        (entry) =>
+          (!dto.resource || entry.resource === dto.resource) &&
+          (!dto.audience || entry.audience === dto.audience),
+      );
+      if (!destination)
+        throw new BadRequestException('destination is not allowed');
+      audience = destination.audience;
+      allowedScopes = destination.scopes;
+    } else {
+      if (dto.resource || (dto.audience && dto.audience !== client.audience))
+        throw new BadRequestException('destination is not allowed');
+      audience = client.audience;
+      allowedScopes = client.scopes;
+    }
+    if (
+      !requestedScopes.length ||
+      !requestedScopes.every((scope) => allowedScopes.includes(scope))
+    )
+      throw new BadRequestException('scope is not allowed for destination');
+    return this.issueClientToken(client, requestedScopes.join(' '), audience);
   }
 
   private async tokenExchange(dto: OAuthTokenDto) {
@@ -349,7 +381,9 @@ export class OAuthService {
     const client = await this.findActiveClient(dto.client_id);
     this.assertGrantAllowed(client, TOKEN_EXCHANGE_GRANT);
     if (client.type !== OAuthClientType.Confidential) {
-      throw new UnauthorizedException('Token exchange requires a confidential client');
+      throw new UnauthorizedException(
+        'Token exchange requires a confidential client',
+      );
     }
     await this.assertClientSecret(client, dto.client_secret);
 
@@ -412,7 +446,12 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid refresh token subject');
     }
 
-    const accessToken = await this.signAccessToken(client, userId, sessionId, scope);
+    const accessToken = await this.signAccessToken(
+      client,
+      userId,
+      sessionId,
+      scope,
+    );
     const refreshToken = this.createOpaqueToken();
     const expiresAt = new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000);
     await this.tokensRepository.save(
@@ -448,22 +487,48 @@ export class OAuthService {
     return response;
   }
 
-  private async issueClientToken(client: OAuthClientEntity, scope: string) {
-    const accessToken = this.createOpaqueToken();
+  private async issueClientToken(
+    client: OAuthClientEntity,
+    scope: string,
+    audience: string,
+  ) {
+    const key = await this.jwksService.getActiveKey();
+    const accessToken = await this.jwtService.signAsync(
+      {
+        grant_type: 'client_credentials',
+        client_id: client.clientId,
+        scope,
+      },
+      {
+        algorithm: 'RS256',
+        header: { alg: 'RS256', typ: 'at+jwt' },
+        audience,
+        expiresIn: `${CLIENT_ACCESS_TOKEN_SECONDS}s`,
+        issuer: this.configService.get<string>(
+          'app.issuer',
+          'https://id.hemia.cloud',
+        ),
+        jwtid: randomUUID(),
+        keyid: key.kid,
+        privateKey: key.privateKey,
+        subject: client.clientId,
+      },
+    );
     await this.tokensRepository.save(
       this.tokensRepository.create({
         tokenHash: this.hashToken(accessToken),
         clientId: client.clientId,
         scope,
         familyId: randomUUID(),
-        expiresAt: new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000),
+        audience,
+        expiresAt: new Date(Date.now() + CLIENT_ACCESS_TOKEN_SECONDS * 1000),
       }),
     );
 
     return {
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: ACCESS_TOKEN_SECONDS,
+      expires_in: CLIENT_ACCESS_TOKEN_SECONDS,
       scope,
     };
   }

@@ -31,7 +31,12 @@ export class RefreshTokenEntity {
   @Column({ name: 'token_hash', length: 255 })
   tokenHash: string;
 
-  @Column({ name: 'previous_token_hash', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'previous_token_hash',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   previousTokenHash?: string | null;
 
   @Column({ name: 'is_used', default: false })

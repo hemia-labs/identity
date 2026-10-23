@@ -28,7 +28,10 @@ export class UsersController {
     @Req() request: Request & { adminActorClientId?: string },
     @Body() dto: CreateUserDto,
   ) {
-    const user = await this.usersService.create(dto, request.adminActorClientId);
+    const user = await this.usersService.create(
+      dto,
+      request.adminActorClientId,
+    );
     return this.usersService.toPublicUser(user);
   }
 
@@ -53,7 +56,11 @@ export class UsersController {
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
   ) {
-    const user = await this.usersService.update(id, dto, request.adminActorClientId);
+    const user = await this.usersService.update(
+      id,
+      dto,
+      request.adminActorClientId,
+    );
     return this.usersService.toPublicUser(user);
   }
 

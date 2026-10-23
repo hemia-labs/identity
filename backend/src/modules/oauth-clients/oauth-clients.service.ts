@@ -1,27 +1,28 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import {
   OAuthClientEntity,
   OAuthClientStatus,
   OAuthClientType,
 } from '../oauth/entities/oauth-client.entity';
-import { CreateOAuthClientDto } from './dtos/create-oauth-client.dto';
+import {
+  CreateOAuthClientDto,
+  OAuthClientDestinationDto,
+} from './dtos/create-oauth-client.dto';
 import { UpdateOAuthClientDto } from './dtos/update-oauth-client.dto';
 
 // View = client sin el hash del secret (nunca se expone).
 type OAuthClientView = Omit<OAuthClientEntity, 'clientSecretHash'>;
 type OAuthClientArrayKey =
-  | 'redirectUris'
-  | 'scopes'
-  | 'grantTypes'
-  | 'responseTypes';
+  'redirectUris' | 'scopes' | 'grantTypes' | 'responseTypes';
 
 @Injectable()
 export class OAuthClientsService {
@@ -34,20 +35,29 @@ export class OAuthClientsService {
     const confidential = dto.type === OAuthClientType.Confidential;
     const secret = confidential ? this.generateSecret() : null;
 
-    const saved = await this.clientsRepository.save(
-      this.clientsRepository.create({
-        clientId: dto.clientId.toLowerCase(),
-        audience: dto.audience,
-        type: dto.type,
-        clientSecretHash: secret ? await argon2.hash(secret) : null,
-        redirectUris: dto.redirectUris ?? [],
-        grantTypes: dto.grantTypes ?? [],
-        responseTypes: dto.responseTypes ?? [],
-        scopes: dto.scopes ?? [],
-        requiresConsent: dto.requiresConsent ?? true,
-        status: dto.status ?? OAuthClientStatus.Active,
-      }),
-    );
+    const saved = await this.clientsRepository
+      .save(
+        this.clientsRepository.create({
+          clientId: dto.clientId.toLowerCase(),
+          audience: dto.audience,
+          serviceDestinations: dto.serviceDestinations ?? null,
+          type: dto.type,
+          clientSecretHash: secret ? await argon2.hash(secret) : null,
+          redirectUris: dto.redirectUris ?? [],
+          grantTypes: dto.grantTypes ?? [],
+          responseTypes: dto.responseTypes ?? [],
+          scopes: dto.scopes ?? [],
+          requiresConsent: dto.requiresConsent ?? true,
+          status: dto.status ?? OAuthClientStatus.Active,
+        }),
+      )
+      .catch((cause: unknown) => {
+        if ((cause as { code?: string }).code === '23505')
+          throw new ConflictException(
+            'El identificador del cliente ya está registrado.',
+          );
+        throw cause;
+      });
 
     // El secret en claro solo se devuelve aquí, una vez.
     return { ...this.toView(saved), clientSecret: secret };
@@ -79,6 +89,109 @@ export class OAuthClientsService {
     client.clientSecretHash = await argon2.hash(secret);
     await this.clientsRepository.save(client);
     return { ...this.toView(client), clientSecret: secret };
+  }
+
+  async ensureServiceDestination(id: string, dto: OAuthClientDestinationDto) {
+    return this.clientsRepository.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(OAuthClientEntity);
+      const client = await repository.findOne({
+        where: { id, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!client) throw new NotFoundException('OAuth client not found');
+      if (
+        client.status !== OAuthClientStatus.Active ||
+        client.type !== OAuthClientType.Confidential ||
+        !client.grantTypes.includes('client_credentials')
+      )
+        throw new BadRequestException(
+          'An active confidential service client is required',
+        );
+      if (!client.serviceDestinations)
+        throw new ConflictException(
+          'Configure explicit destinations before adding a destination; existing service permissions must be preserved',
+        );
+      const destinations = client.serviceDestinations.map((destination) => ({
+        ...destination,
+        scopes: [...destination.scopes],
+      }));
+      const existing = destinations.find(
+        (destination) => destination.resource === dto.resource,
+      );
+      if (
+        (existing && existing.audience !== dto.audience) ||
+        destinations.some(
+          (destination) =>
+            destination.audience === dto.audience &&
+            destination.resource !== dto.resource,
+        )
+      )
+        throw new ConflictException(
+          'El destino o la audiencia ya están asociados a otra configuración OAuth.',
+        );
+      if (
+        existing &&
+        dto.scopes.every((scope) => existing.scopes.includes(scope))
+      )
+        return this.toView(client);
+      if (existing) {
+        existing.scopes = [...new Set([...existing.scopes, ...dto.scopes])];
+        if (existing.scopes.length > 100)
+          throw new BadRequestException('Too many destination scopes');
+      } else {
+        if (destinations.length >= 32)
+          throw new BadRequestException('Too many service destinations');
+        destinations.push({
+          resource: dto.resource,
+          audience: dto.audience,
+          scopes: [...new Set(dto.scopes)],
+        });
+      }
+      // Update only this policy under the row lock; keep credentials and other flows intact.
+      await repository.update(id, { serviceDestinations: destinations });
+      return this.toView(await repository.findOneByOrFail({ id }));
+    });
+  }
+
+  async removeServiceDestinationScopes(
+    id: string,
+    dto: OAuthClientDestinationDto,
+  ) {
+    return this.clientsRepository.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(OAuthClientEntity);
+      const client = await repository.findOne({
+        where: { id, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!client) throw new NotFoundException('OAuth client not found');
+      if (!client.serviceDestinations)
+        throw new ConflictException(
+          'Explicit service destinations are required',
+        );
+      const existing = client.serviceDestinations.find(
+        (destination) =>
+          destination.resource === dto.resource &&
+          destination.audience === dto.audience,
+      );
+      if (
+        !existing ||
+        !dto.scopes.some((scope) => existing.scopes.includes(scope))
+      )
+        return this.toView(client);
+      const scopes = existing.scopes.filter(
+        (scope) => !dto.scopes.includes(scope),
+      );
+      const destinations = client.serviceDestinations.flatMap((destination) =>
+        destination === existing
+          ? scopes.length
+            ? [{ ...destination, scopes }]
+            : []
+          : [destination],
+      );
+      // Keep [] explicit: null would restore the client's top-level scope policy.
+      await repository.update(id, { serviceDestinations: destinations });
+      return this.toView(await repository.findOneByOrFail({ id }));
+    });
   }
 
   addRedirectUri(id: string, value: string) {
@@ -116,10 +229,11 @@ export class OAuthClientsService {
   }
 
   async remove(id: string) {
-    const client = await this.findEntity(id);
-    client.status = OAuthClientStatus.Deleted;
-    await this.clientsRepository.save(client);
-    await this.clientsRepository.softDelete(id);
+    const result = await this.clientsRepository.update(
+      { id, deletedAt: IsNull() },
+      { status: OAuthClientStatus.Deleted, deletedAt: new Date() },
+    );
+    if (!result.affected) throw new NotFoundException('OAuth client not found');
   }
 
   private async findEntity(id: string) {

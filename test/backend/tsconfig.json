@@ -1,0 +1,57 @@
+{
+  "extends": "../../backend/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "baseUrl": "../../backend",
+    "paths": {
+      "@nestjs/common": [
+        "node_modules/@nestjs/common"
+      ],
+      "@nestjs/common/*": [
+        "node_modules/@nestjs/common/*"
+      ],
+      "@nestjs/config": [
+        "node_modules/@nestjs/config"
+      ],
+      "@nestjs/core": [
+        "node_modules/@nestjs/core"
+      ],
+      "@nestjs/jwt": [
+        "node_modules/@nestjs/jwt"
+      ],
+      "@nestjs/testing": [
+        "node_modules/@nestjs/testing"
+      ],
+      "argon2": [
+        "node_modules/argon2"
+      ],
+      "class-transformer": [
+        "node_modules/class-transformer"
+      ],
+      "class-validator": [
+        "node_modules/class-validator"
+      ],
+      "supertest": [
+        "node_modules/@types/supertest"
+      ],
+      "supertest/types": [
+        "node_modules/@types/supertest/types"
+      ],
+      "typeorm": [
+        "node_modules/typeorm"
+      ]
+    },
+    "types": [
+      "node",
+      "jest"
+    ],
+    "typeRoots": [
+      "../../backend/node_modules/@types"
+    ]
+  },
+  "include": [
+    "unit/**/*.spec.ts",
+    "e2e/**/*.ts"
+  ]
+}

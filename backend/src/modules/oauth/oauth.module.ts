@@ -9,6 +9,8 @@ import { UsersModule } from '../users/users.module';
 import { OAuthAuthorizationCodeEntity } from './entities/oauth-authorization-code.entity';
 import { OAuthClientEntity } from './entities/oauth-client.entity';
 import { OAuthTokenEntity } from './entities/oauth-token.entity';
+import { ReauthenticationController } from '../auth/reauthentication/reauthentication.controller';
+import { ReauthenticationService } from '../auth/reauthentication/reauthentication.service';
 import { OAuthController } from './oauth.controller';
 import { OAuthService } from './oauth.service';
 
@@ -26,8 +28,8 @@ import { OAuthService } from './oauth.service';
     SessionsModule,
     UsersModule,
   ],
-  controllers: [OAuthController],
-  providers: [OAuthService],
+  controllers: [OAuthController, ReauthenticationController],
+  providers: [OAuthService, ReauthenticationService],
   exports: [OAuthService],
 })
 export class OAuthModule {}

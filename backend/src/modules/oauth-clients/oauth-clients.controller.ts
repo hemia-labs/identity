@@ -6,11 +6,17 @@ import {
   Param,
   Patch,
   Post,
+  Put,
+  ParseUUIDPipe,
+  ValidationPipe,
   UseGuards,
 } from '@nestjs/common';
 import { AdminAction } from '../../common/decorators/admin-action.decorator';
 import { IdentityAdminGuard } from '../../common/guards/identity-admin.guard';
-import { CreateOAuthClientDto } from './dtos/create-oauth-client.dto';
+import {
+  CreateOAuthClientDto,
+  OAuthClientDestinationDto,
+} from './dtos/create-oauth-client.dto';
 import { OAuthClientValueDto } from './dtos/oauth-client-value.dto';
 import { UpdateOAuthClientDto } from './dtos/update-oauth-client.dto';
 import { OAuthClientsService } from './oauth-clients.service';
@@ -48,6 +54,38 @@ export class OAuthClientsController {
   @AdminAction('identity.oauth_clients.update')
   rotateSecret(@Param('id') id: string) {
     return this.oauthClientsService.rotateSecret(id);
+  }
+
+  @Put(':id/service-destinations')
+  @AdminAction('identity.oauth_clients.update')
+  ensureServiceDestination(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: OAuthClientDestinationDto,
+  ) {
+    return this.oauthClientsService.ensureServiceDestination(id, dto);
+  }
+
+  @Delete(':id/service-destinations')
+  @AdminAction('identity.oauth_clients.update')
+  removeServiceDestinationScopes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: OAuthClientDestinationDto,
+  ) {
+    return this.oauthClientsService.removeServiceDestinationScopes(id, dto);
   }
 
   @Post(':id/redirect-uris')

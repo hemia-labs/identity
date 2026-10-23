@@ -1,0 +1,286 @@
+[
+  {
+    "client_id": "access",
+    "audience": "access-api",
+    "type": "confidential",
+    "redirect_uris": [
+      "http://localhost:3019/auth/callback"
+    ],
+    "grant_types": [
+      "authorization_code",
+      "client_credentials",
+      "refresh_token",
+      "urn:ietf:params:oauth:grant-type:token-exchange"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "access.access",
+      "identity.tokens.introspect"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "access-legal-validator",
+    "audience": "legal-api",
+    "type": "confidential",
+    "redirect_uris": [],
+    "grant_types": [
+      "client_credentials"
+    ],
+    "response_types": [],
+    "scopes": [
+      "legal.authorization.targets.validate"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "balanz-billing-service",
+    "audience": "billing-api",
+    "type": "confidential",
+    "redirect_uris": [],
+    "grant_types": [
+      "client_credentials"
+    ],
+    "response_types": [],
+    "scopes": [
+      "billing.integration.catalog.read",
+      "billing.integration.checkout.create",
+      "billing.integration.checkout.read",
+      "billing.integration.licenses.read"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "billing",
+    "audience": "billing-api",
+    "type": "confidential",
+    "redirect_uris": [
+      "http://localhost:3015/auth/callback"
+    ],
+    "grant_types": [
+      "authorization_code",
+      "client_credentials",
+      "refresh_token",
+      "urn:ietf:params:oauth:grant-type:token-exchange"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "billing.access"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "billing-legal-service",
+    "audience": "legal-api",
+    "type": "confidential",
+    "redirect_uris": [],
+    "grant_types": [
+      "client_credentials"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "legal.documents.read",
+      "legal.acceptances.read",
+      "legal.pending.evaluate",
+      "legal.acceptances.validate",
+      "legal.integration.acceptances.validate"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "console",
+    "audience": "console-api",
+    "type": "confidential",
+    "redirect_uris": [
+      "http://localhost:3016/auth/callback"
+    ],
+    "grant_types": [
+      "authorization_code",
+      "client_credentials",
+      "refresh_token",
+      "urn:ietf:params:oauth:grant-type:token-exchange"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "console.access"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "console-access-admin",
+    "audience": "access-api",
+    "type": "confidential",
+    "redirect_uris": [],
+    "grant_types": [
+      "client_credentials"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "organization.read",
+      "organization.update",
+      "organization.archive",
+      "membership.read",
+      "membership.invite",
+      "membership.suspend",
+      "membership.revoke",
+      "role.read",
+      "role.assign",
+      "role.revoke",
+      "product_access.read",
+      "product_access.enable",
+      "product_access.suspend",
+      "product_access.disable",
+      "audit.read"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "console-identity-admin",
+    "audience": "identity-api",
+    "type": "confidential",
+    "redirect_uris": [],
+    "grant_types": [
+      "client_credentials"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "identity.users.read",
+      "identity.users.create",
+      "identity.users.update",
+      "identity.users.lock",
+      "identity.users.unlock",
+      "identity.users.delete",
+      "identity.oauth_clients.read",
+      "identity.oauth_clients.create",
+      "identity.oauth_clients.update",
+      "identity.oauth_clients.delete"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "docs",
+    "audience": "docs-api",
+    "type": "confidential",
+    "redirect_uris": [
+      "http://localhost:3018/auth/callback"
+    ],
+    "grant_types": [
+      "authorization_code",
+      "client_credentials",
+      "refresh_token",
+      "urn:ietf:params:oauth:grant-type:token-exchange"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "docs.access"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "helpdesk",
+    "audience": "helpdesk-api",
+    "type": "confidential",
+    "redirect_uris": [
+      "http://localhost:3020/auth/callback"
+    ],
+    "grant_types": [
+      "authorization_code",
+      "client_credentials",
+      "refresh_token",
+      "urn:ietf:params:oauth:grant-type:token-exchange"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "helpdesk.access"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "legal",
+    "audience": "legal-api",
+    "type": "confidential",
+    "redirect_uris": [
+      "http://localhost:3017/auth/callback"
+    ],
+    "grant_types": [
+      "authorization_code",
+      "client_credentials",
+      "refresh_token",
+      "urn:ietf:params:oauth:grant-type:token-exchange"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "legal.access",
+      "legal.self.pending.read",
+      "legal.self.acceptances.create",
+      "legal.self.acceptances.read"
+    ],
+    "requires_consent": false,
+    "status": "active"
+  },
+  {
+    "client_id": "legal-service-dev",
+    "audience": "identity-api",
+    "type": "confidential",
+    "redirect_uris": [],
+    "grant_types": [
+      "client_credentials"
+    ],
+    "response_types": [],
+    "scopes": [],
+    "requires_consent": false,
+    "status": "active"
+  }
+]

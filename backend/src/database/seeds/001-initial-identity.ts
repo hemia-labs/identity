@@ -4,15 +4,18 @@ import { DataSource, QueryRunner } from 'typeorm';
 
 const systemClients = [
   {
-    clientId: 'horus',
-    redirectUris: [
-      'http://localhost:5180/auth/callback',
-      'https://horus.hemia.dev/auth/callback',
-    ],
-  },
-  {
     clientId: 'legal',
     redirectUris: ['http://localhost:3017/auth/callback'],
+    scopes: [
+      'openid',
+      'profile',
+      'email',
+      'offline_access',
+      'legal.access',
+      'legal.self.pending.read',
+      'legal.self.acceptances.create',
+      'legal.self.acceptances.read',
+    ],
   },
   {
     clientId: 'console',
@@ -62,6 +65,15 @@ export async function seedInitialIdentity(dataSource: DataSource) {
 }
 
 async function seedAdmin(queryRunner: QueryRunner) {
+  const email = (
+    process.env.SUPER_ADMIN_EMAIL ?? 'admin@hemia.cloud'
+  ).toLowerCase();
+  const existing = (await queryRunner.query(
+    `SELECT 1 FROM users WHERE email = $1 AND deleted_at IS NULL`,
+    [email],
+  )) as unknown[];
+  if (existing.length) return;
+
   const password = process.env.SUPER_ADMIN_PASSWORD;
   if (!password) throw new Error('SUPER_ADMIN_PASSWORD is required');
 
@@ -72,18 +84,10 @@ async function seedAdmin(queryRunner: QueryRunner) {
         "status", "email_verified"
       )
       VALUES ($1, $2, $3, $4, $5, 'active', true)
-      ON CONFLICT ("email") WHERE "deleted_at" IS NULL DO UPDATE
-      SET
-        "username" = EXCLUDED."username",
-        "password_hash" = EXCLUDED."password_hash",
-        "first_name" = EXCLUDED."first_name",
-        "last_name" = EXCLUDED."last_name",
-        "status" = 'active',
-        "email_verified" = true,
-        "updated_at" = now()
+      ON CONFLICT ("email") WHERE "deleted_at" IS NULL DO NOTHING
     `,
     [
-      (process.env.SUPER_ADMIN_EMAIL ?? 'admin@hemia.cloud').toLowerCase(),
+      email,
       (process.env.SUPER_ADMIN_USERNAME ?? 'superadmin').toLowerCase(),
       await argon2.hash(password, { type: argon2.argon2id }),
       process.env.SUPER_ADMIN_FIRST_NAME ?? 'Hemia',
@@ -93,9 +97,9 @@ async function seedAdmin(queryRunner: QueryRunner) {
 }
 
 async function seedJwks(queryRunner: QueryRunner) {
-  const existing = await queryRunner.query(
+  const existing = (await queryRunner.query(
     `SELECT 1 FROM "jwks_keys" WHERE "status" = 'active' LIMIT 1`,
-  );
+  )) as unknown[];
   if (existing.length) return;
 
   const privateKey =
@@ -115,45 +119,16 @@ async function seedJwks(queryRunner: QueryRunner) {
       VALUES ($1, 'RS256', $2, $3, 'active')
       ON CONFLICT ("kid") DO NOTHING
     `,
-    [process.env.JWKS_KEY_KID ?? `identity-${Date.now()}`, publicKey, privateKey],
+    [
+      process.env.JWKS_KEY_KID ?? `identity-${Date.now()}`,
+      publicKey,
+      privateKey,
+    ],
   );
 }
 
 async function seedOAuthClients(queryRunner: QueryRunner) {
-  await upsertClient(queryRunner, {
-    clientId: 'identity-web',
-    audience: 'identity-api',
-    type: 'public',
-    secretHash: null,
-    redirectUris: (process.env.IDENTITY_WEB_REDIRECT_URIS ?? 'http://localhost:5173/auth/callback')
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean),
-    grantTypes: ['authorization_code', 'refresh_token'],
-  });
-
-  await upsertClient(queryRunner, {
-    clientId: 'identity-admin-service',
-    audience: 'identity-api',
-    type: 'confidential',
-    secretHash: await clientSecretHash(queryRunner, 'identity-admin-service'),
-    redirectUris: [],
-    grantTypes: ['client_credentials'],
-    scopes: [
-      'identity.users.read',
-      'identity.users.create',
-      'identity.users.update',
-      'identity.users.lock',
-      'identity.users.unlock',
-      'identity.users.delete',
-      'identity.oauth_clients.read',
-      'identity.oauth_clients.create',
-      'identity.oauth_clients.update',
-      'identity.oauth_clients.delete',
-    ],
-  });
-
-  await upsertClient(queryRunner, {
+  await insertClient(queryRunner, {
     clientId: 'console-identity-admin',
     audience: 'identity-api',
     type: 'confidential',
@@ -174,7 +149,7 @@ async function seedOAuthClients(queryRunner: QueryRunner) {
     ],
   });
 
-  await upsertClient(queryRunner, {
+  await insertClient(queryRunner, {
     clientId: 'console-access-admin',
     audience: 'access-api',
     type: 'confidential',
@@ -196,24 +171,66 @@ async function seedOAuthClients(queryRunner: QueryRunner) {
       'product_access.enable',
       'product_access.suspend',
       'product_access.disable',
-      'policy.read',
-      'policy.manage',
       'audit.read',
     ],
   });
 
-  await upsertClient(queryRunner, {
+  await insertClient(queryRunner, {
     clientId: 'billing-legal-service',
     audience: 'legal-api',
     type: 'confidential',
     secretHash: await clientSecretHash(queryRunner, 'billing-legal-service'),
     redirectUris: [],
     grantTypes: ['client_credentials'],
-    scopes: ['legal.documents.read', 'legal.acceptances.read'],
+    scopes: [
+      'legal.documents.read',
+      'legal.acceptances.read',
+      'legal.pending.evaluate',
+      'legal.acceptances.validate',
+      'legal.integration.acceptances.validate',
+    ],
+  });
+
+  await insertClient(queryRunner, {
+    clientId: 'access-legal-validator',
+    audience: 'legal-api',
+    type: 'confidential',
+    secretHash: await clientSecretHash(queryRunner, 'access-legal-validator'),
+    redirectUris: [],
+    grantTypes: ['client_credentials'],
+    responseTypes: [],
+    scopes: ['legal.authorization.targets.validate'],
+  });
+
+  await insertClient(queryRunner, {
+    clientId: 'balanz-billing-service',
+    audience: 'billing-api',
+    type: 'confidential',
+    secretHash: await clientSecretHash(queryRunner, 'balanz-billing-service'),
+    redirectUris: [],
+    grantTypes: ['client_credentials'],
+    responseTypes: [],
+    scopes: [
+      'billing.integration.catalog.read',
+      'billing.integration.checkout.create',
+      'billing.integration.checkout.read',
+      'billing.integration.licenses.read',
+    ],
+  });
+
+  await insertClient(queryRunner, {
+    clientId: 'legal-service-dev',
+    audience: 'identity-api',
+    type: 'confidential',
+    secretHash: await clientSecretHash(queryRunner, 'legal-service-dev'),
+    redirectUris: [],
+    grantTypes: ['client_credentials'],
+    responseTypes: [],
+    scopes: [],
   });
 
   for (const client of systemClients) {
-    await upsertClient(queryRunner, {
+    await insertClient(queryRunner, {
       ...client,
       audience: `${client.clientId}-api`,
       type: 'confidential',
@@ -228,7 +245,7 @@ async function seedOAuthClients(queryRunner: QueryRunner) {
   }
 }
 
-async function upsertClient(
+async function insertClient(
   queryRunner: QueryRunner,
   input: {
     clientId: string;
@@ -238,6 +255,7 @@ async function upsertClient(
     redirectUris: string[];
     grantTypes: string[];
     scopes?: string[];
+    responseTypes?: string[];
   },
 ) {
   await queryRunner.query(
@@ -249,21 +267,10 @@ async function upsertClient(
       )
       VALUES (
         gen_random_uuid(), $1, $2, $3, $4,
-        $5, $6, ARRAY['code'], $7,
+        $5, $6, $8, $7,
         false, 'active'
       )
-      ON CONFLICT ("client_id") WHERE "deleted_at" IS NULL DO UPDATE
-      SET
-        "audience" = EXCLUDED."audience",
-        "client_secret_hash" = "oauth_clients"."client_secret_hash",
-        "type" = EXCLUDED."type",
-        "redirect_uris" = EXCLUDED."redirect_uris",
-        "grant_types" = EXCLUDED."grant_types",
-        "response_types" = EXCLUDED."response_types",
-        "scopes" = EXCLUDED."scopes",
-        "requires_consent" = false,
-        "status" = 'active',
-        "updated_at" = now()
+      ON CONFLICT ("client_id") WHERE "deleted_at" IS NULL DO NOTHING
     `,
     [
       input.clientId,
@@ -279,19 +286,21 @@ async function upsertClient(
         'offline_access',
         `${input.clientId}.access`,
       ],
+      input.responseTypes ?? ['code'],
     ],
   );
 }
 
 async function clientSecretHash(queryRunner: QueryRunner, clientId: string) {
-  const [existing] = await queryRunner.query(
+  const [existing] = (await queryRunner.query(
     `SELECT "client_secret_hash" FROM "oauth_clients" WHERE "client_id" = $1 AND "deleted_at" IS NULL`,
     [clientId],
-  );
-  if (existing?.client_secret_hash) return existing.client_secret_hash as string;
+  )) as Array<{ client_secret_hash: string | null }>;
+  if (existing) return existing.client_secret_hash;
 
   const envName = `OAUTH_CLIENT_SECRET_${clientId.replace(/-/g, '_').toUpperCase()}`;
-  const secret = process.env[envName] ?? generateClientSecret(clientId, envName);
+  const secret =
+    process.env[envName] ?? generateClientSecret(clientId, envName);
   return argon2.hash(secret, { type: argon2.argon2id });
 }
 

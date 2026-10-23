@@ -32,7 +32,10 @@ export class UsersService {
     await this.identityEventsService.emit({
       type: IdentityEventType.UserCreated,
       userId: saved.id,
-      payload: { user: this.toBasicProfile(saved), actor_client_id: actorClientId },
+      payload: {
+        user: this.toBasicProfile(saved),
+        actor_client_id: actorClientId,
+      },
     });
     return saved;
   }
@@ -107,7 +110,10 @@ export class UsersService {
     await this.identityEventsService.emit({
       type: IdentityEventType.UserUpdated,
       userId: saved.id,
-      payload: { user: this.toBasicProfile(saved), actor_client_id: actorClientId },
+      payload: {
+        user: this.toBasicProfile(saved),
+        actor_client_id: actorClientId,
+      },
     });
     return saved;
   }
@@ -124,7 +130,10 @@ export class UsersService {
           ? IdentityEventType.UserSuspended
           : IdentityEventType.UserUpdated,
       userId: saved.id,
-      payload: { user: this.toBasicProfile(saved), actor_client_id: actorClientId },
+      payload: {
+        user: this.toBasicProfile(saved),
+        actor_client_id: actorClientId,
+      },
     });
     return saved;
   }
@@ -137,7 +146,10 @@ export class UsersService {
     await this.identityEventsService.emit({
       type: IdentityEventType.UserDeleted,
       userId: user.id,
-      payload: { user: this.toBasicProfile(user), actor_client_id: actorClientId },
+      payload: {
+        user: this.toBasicProfile(user),
+        actor_client_id: actorClientId,
+      },
     });
   }
 

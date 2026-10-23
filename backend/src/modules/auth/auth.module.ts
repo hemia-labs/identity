@@ -7,8 +7,8 @@ import { SessionsModule } from '../sessions/sessions.module';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { GoogleAuthGuard } from './guards/google-auth.guard';
-import { GoogleStrategy } from './strategies/google.strategy';
+import { GoogleAuthGuard } from './google/google-auth.guard';
+import { GoogleStrategy } from './google/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({

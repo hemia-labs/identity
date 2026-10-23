@@ -140,3 +140,11 @@ Antes de integrarse, el cliente debe estar dado de alta en Hemia ID. Datos que n
 - [Backend README](./backend/README.md)
 - [Plan de Migracion](../docs/migracion/plan-migracion-identity-access.md)
 - [ADR](../docs/ADR/documentoADR.md)
+
+## Pruebas y organización
+
+Todas las pruebas están centralizadas en [`test/`](test/README.md). Ejecutar `bun run test` desde esta raíz; las comprobaciones del artefacto del SDK usan `bun run test:package` y `bun run test:tarball`.
+
+## Fuente del SDK y paquetes publicados
+
+`packages/auth` conserva la fuente, pruebas y flujo de publicación de `@hemia/auth`. Su entrada workspace en el lockfile corresponde a esa autoría; backend y frontend de Identity no dependen del SDK ni lo importan localmente. Las aplicaciones consumidoras instalan la versión publicada `@hemia/auth@1.0.8` desde npm, sin dependencias `file:`, `link:`, tarballs de vendor ni imports de `packages/auth`. Los cambios pendientes de una próxima versión del SDK se prueban aquí y no se consideran disponibles en los consumidores hasta su publicación.

@@ -21,11 +21,11 @@ import {
   REFRESH_TOKEN_COOKIE,
 } from './constants/auth.constants';
 import { AuthService } from './auth.service';
-import { ChangePasswordDto } from './dtos/change-password.dto';
-import { ForgotPasswordDto } from './dtos/forgot-password.dto';
+import { ChangePasswordDto } from './dtos/password/change-password.dto';
+import { ForgotPasswordDto } from './dtos/password/forgot-password.dto';
 import { LoginDto } from './dtos/login.dto';
-import { ResetPasswordDto } from './dtos/reset-password.dto';
-import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { ResetPasswordDto } from './dtos/password/reset-password.dto';
+import { GoogleAuthGuard } from './google/google-auth.guard';
 import { UserEntity } from '../users/entities/user.entity';
 
 type GoogleAuthenticatedRequest = Request & {
@@ -190,7 +190,9 @@ export class AuthController {
     const baseOptions = this.getBaseCookieOptions();
     const configuredDomain = baseOptions.domain;
     const paths = ['/', '/api/v1', '/api/v1/auth', '/oauth'];
-    const domains = configuredDomain ? [configuredDomain, undefined] : [undefined];
+    const domains = configuredDomain
+      ? [configuredDomain, undefined]
+      : [undefined];
 
     for (const path of paths) {
       for (const domain of domains) {

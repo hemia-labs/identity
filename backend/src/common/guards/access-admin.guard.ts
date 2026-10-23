@@ -37,14 +37,16 @@ export class AccessAdminGuard implements CanActivate {
 
     const baseUrl = this.config.getOrThrow<string>('ACCESS_API_URL');
     try {
-      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/me/context`, {
-        headers: { authorization },
-      });
+      const response = await fetch(
+        `${baseUrl.replace(/\/$/, '')}/v1/me/context`,
+        {
+          headers: { authorization },
+        },
+      );
       if (!response.ok) throw new UnauthorizedException('Access denied');
       const contextBody = (await response.json()) as Record<string, unknown>;
       const contexts = contextBody[ACCESS_CONTEXT_COLLECTION] as
-        | Array<Record<string, string[]>>
-        | undefined;
+        Array<Record<string, string[]>> | undefined;
       const allowed = contexts?.some(
         (item) =>
           item[ACCESS_ROLE_COLLECTION]?.includes(PLATFORM_ADMIN) ||

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: "UiCard" })
 import type { HTMLAttributes } from "vue"
 import { cn } from "@/lib/utils"
 

@@ -1,4 +1,11 @@
-import { IsIn, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 
 export class OAuthTokenDto {
   @IsString()
@@ -50,6 +57,16 @@ export class OAuthTokenDto {
   @IsOptional()
   @IsString()
   subject_token_type?: string;
+
+  @IsOptional()
+  @IsUrl({
+    require_tld: false,
+    protocols: ['https', 'http'],
+    require_protocol: true,
+  })
+  @MaxLength(2048)
+  @Matches(/^[^#]+$/)
+  resource?: string;
 
   @IsOptional()
   @IsString()

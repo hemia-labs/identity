@@ -52,3 +52,5 @@ bun test:unit
 ```sh
 bun lint
 ```
+
+Las pruebas Vue están centralizadas en [`../test/frontend/`](../test/README.md). Ejecutar `bun run test --run` para una pasada o `bun run test:unit` para modo watch.

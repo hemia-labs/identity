@@ -27,13 +27,7 @@ import { UsersModule } from './modules/users/users.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
-      load: [
-        appConfig,
-        cookieConfig,
-        databaseConfig,
-        emailConfig,
-        jwtConfig,
-      ],
+      load: [appConfig, cookieConfig, databaseConfig, emailConfig, jwtConfig],
       validationSchema: envValidationSchema,
       validationOptions: {
         allowUnknown: true,

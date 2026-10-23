@@ -39,10 +39,11 @@ export class MailService {
 
   async send(input: SendMailInput) {
     try {
-      return await this.emailSender.sendEmail({
+      const result: unknown = await this.emailSender.sendEmail({
         ...input,
         app: input.app ?? this.configService.getOrThrow<string>('email.app'),
       });
+      return result;
     } catch (error) {
       this.logger.error('Email delivery failed', this.getErrorStack(error));
       throw new ServiceUnavailableException({
