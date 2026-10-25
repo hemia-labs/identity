@@ -167,6 +167,7 @@ jobs:
 
   auto-deploy:
     needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     environment: prod
     runs-on: ubuntu-24.04
     timeout-minutes: 5
