@@ -167,24 +167,13 @@ jobs:
 
   auto-deploy:
     needs: publish
-    environment: prod
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     permissions:
-      actions: write
-    steps:
-      - name: Dispatch deployment when enabled in prod
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.publish.outputs.release_tag }}
-          ENABLE_DEPLOY: ${{ vars.ENABLE_IDENTITY_DEPLOY }}
-        run: |
-          set -euo pipefail
-          if [[ "$ENABLE_DEPLOY" != 'true' ]]; then
-            echo "Release $RELEASE_TAG published. Automatic deployment is disabled in prod." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          # Explicit dispatch works with GITHUB_TOKEN and keeps deployment OIDC on main.
-          gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main \
-            -f operation=deploy -f "release_tag=$RELEASE_TAG"
-          echo "Automatic deployment requested for $RELEASE_TAG. Check the Identity deployment run for its result." >> "$GITHUB_STEP_SUMMARY"
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      operation: deploy
+      release_tag: ${{ needs.publish.outputs.release_tag }}
+      automatic: true
+    secrets: inherit

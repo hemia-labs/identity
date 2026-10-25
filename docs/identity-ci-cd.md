@@ -16,11 +16,12 @@ el SDK `@hemia/auth` en `develop` y la aplicacion Identity en `main`.
    las imagenes probadas. Si pasa, se genera automaticamente el tag
    `identity-vMAJOR.MINOR.PATCH`, se publican las imagenes en el registry privado y la Release inmutable
    con sus assets. No hay que crear ni empujar tags manualmente.
-4. Tras publicar, un job con environment `prod` lee `ENABLE_IDENTITY_DEPLOY`.
-   Si vale exactamente `true`, solicita `Identity deployment` desde `main` con
-   operacion `deploy` y ese tag. El resultado aparece en otra ejecucion de Actions.
-5. `Identity deployment` conserva `deploy`, `rollback` y `migrate` manuales.
-   Solo ese workflow se conecta por Tailscale y SSH.
+4. Tras publicar, `Identity release` reutiliza `deploy.yml` dentro de la misma
+   ejecucion. Un job con environment `prod` lee `ENABLE_IDENTITY_DEPLOY`: solo si
+   vale exactamente `true` se despliega ese tag por Tailscale y SSH. El resultado
+   del despliegue forma parte del resultado de `Identity release`.
+5. `Identity deployment` conserva `deploy`, `rollback` y `migrate` manuales,
+   reutilizando la misma validacion y logica de despliegue.
 
 La PR de version requiere un merge adicional: un merge funcional acumula cambios;
 el merge de version publica. El changeset inicial solicita `1.0.0`. Los tags y
@@ -79,8 +80,9 @@ Secrets del mismo environment:
 No se necesita `BACKEND_ENV`, token Cloudflare ni secreto OAuth Tailscale en este
 workflow. `GITHUB_TOKEN` lo proporciona GitHub: crea la Release con
 permisos limitados al job de publicacion. El job de despliegue solo lee contenido y
-solicita OIDC. El job que solicita deploy automatico tiene unicamente
-`actions: write` para despachar el workflow; no solicita OIDC ni usa secretos SSH.
+solicita OIDC. La llamada reutilizable del deploy hereda los secretos necesarios;
+los secretos y variables de `prod` se resuelven en los jobs que usan ese environment.
+No se requiere `actions: write` ni se despacha otra ejecucion.
 Los secretos de aplicacion permanecen en el servidor.
 
 En Settings > Actions > General, permitir que GitHub Actions cree pull requests.
@@ -343,14 +345,14 @@ contenido del conjunto de migraciones. Se valida tanto en runner como en host.
 Las dos imagenes proceden del smoke test del mismo job que las publica.
 No se transfieren a otro job ni se almacenan como artifacts en GitHub.
 
-Con `prod.ENABLE_IDENTITY_DEPLOY=true`, la publicacion solicita automaticamente
-`deploy` para esa Release. Revisar tambien la ejecucion **Identity deployment**:
-que la Release se publique o que el despacho tenga exito no significa que el
-despliegue haya terminado correctamente. El propio despliegue vuelve a comprobar
-la variable antes de conectarse por Tailscale. Se usa `workflow_dispatch` explicito
-porque los eventos `release` creados por `GITHUB_TOKEN` no disparan otro workflow;
-GitHub permite expresamente despachar workflows con ese token.
-[Referencia de GitHub](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+Con `prod.ENABLE_IDENTITY_DEPLOY=true`, el job `auto-deploy` de **Identity release**
+ejecuta el workflow reutilizable `deploy.yml` para esa Release dentro de la misma
+ejecucion de Actions. Publicacion y despliegue conservan jobs separados: si falla
+el despliegue, reintentar los jobs fallidos no vuelve a publicar la Release inmutable.
+Tambien se puede desplegar una Release existente manualmente desde **Identity deployment**.
+Con la variable deshabilitada, la publicacion termina correctamente y se omite el
+despliegue automatico. El job de despliegue vuelve a comprobar la variable antes de
+conectarse por Tailscale.
 
 No aplica migraciones automaticamente. Si el preflight encuentra pendientes,
 falla antes de reemplazar los contenedores. Ejecutar `migrate` manualmente tras

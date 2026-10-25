@@ -1,5 +1,4 @@
-"""Exercise the actual release dispatch shell step without contacting GitHub."""
-import json
+"""Exercise the production deployment gate without contacting GitHub or apps."""
 import os
 from pathlib import Path
 import re
@@ -12,53 +11,49 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class AutoDeployTest(unittest.TestCase):
-    def run_dispatch(self, enabled, gh_exit=0):
+    def run_gate(self, enabled, automatic='true'):
+        workflow = (ROOT / '.github/workflows/deploy.yml').read_text()
+        gate = workflow.split('\n  enabled:\n', 1)[1].split('\n  deploy:\n', 1)[0]
+        self.assertIn('environment: prod', gate)
+        self.assertIn('ENABLE_DEPLOY: ${{ vars.ENABLE_IDENTITY_DEPLOY }}', gate)
+        script = textwrap.dedent(re.search(r'        run: \|\n((?:          .*\n|\n)+)', gate)[1])
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'output'
+            summary = Path(directory) / 'summary'
+            result = subprocess.run(['bash', '-euo', 'pipefail', '-c', script], env={**os.environ,
+                'AUTOMATIC': automatic, 'ENABLE_DEPLOY': enabled,
+                'GITHUB_OUTPUT': str(output), 'GITHUB_STEP_SUMMARY': str(summary)},
+                text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return output.read_text().strip(), summary.read_text() if summary.exists() else ''
+
+    def test_release_reuses_deployment_after_successful_publication(self):
         workflow = (ROOT / '.github/workflows/identity-release.yml').read_text()
         job = workflow.split('\n  auto-deploy:\n', 1)[1]
         self.assertIn('needs: publish', job)
-        self.assertIn('environment: prod', job)
-        self.assertIn('ENABLE_DEPLOY: ${{ vars.ENABLE_IDENTITY_DEPLOY }}', job)
-        script = textwrap.dedent(re.search(r'        run: \|\n((?:          .*\n|\n)+)', job)[1])
-        with tempfile.TemporaryDirectory() as directory:
-            directory = Path(directory)
-            gh = directory / 'gh'
-            gh.write_text('#!/usr/bin/env python3\nimport json,os,sys\n'
-                          'from pathlib import Path\n'
-                          'Path(os.environ["CALLS"]).write_text(json.dumps(sys.argv[1:]))\n'
-                          'sys.exit(int(os.environ["GH_EXIT"]))\n')
-            gh.chmod(0o700)
-            calls = directory / 'calls.json'
-            summary = directory / 'summary'
-            result = subprocess.run(['bash', '-c', script], env={**os.environ,
-                'PATH': str(directory) + os.pathsep + os.environ['PATH'],
-                'ENABLE_DEPLOY': enabled, 'RELEASE_TAG': 'identity-v1.2.3',
-                'GITHUB_REPOSITORY': 'hemia-labs/identity', 'CALLS': str(calls),
-                'GITHUB_STEP_SUMMARY': str(summary), 'GH_EXIT': str(gh_exit)},
-                text=True, capture_output=True)
-            return result, json.loads(calls.read_text()) if calls.exists() else None, (
-                summary.read_text() if summary.exists() else '')
+        self.assertIn("!cancelled() && needs.publish.result == 'success'", job)
+        self.assertIn('uses: ./.github/workflows/deploy.yml', job)
+        self.assertIn('release_tag: ${{ needs.publish.outputs.release_tag }}', job)
+        self.assertIn('automatic: true', job)
+        self.assertNotIn('gh workflow run', job)
+        deploy = (ROOT / '.github/workflows/deploy.yml').read_text()
+        self.assertIn('workflow_dispatch:', deploy)
+        self.assertIn('options: [deploy, rollback, migrate]', deploy)
+        self.assertIn("if: needs.enabled.outputs.deploy == 'true'", deploy)
 
-    def test_dispatches_only_deploy_on_main_for_published_tag(self):
-        result, calls, summary = self.run_dispatch('true')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ['workflow', 'run', 'deploy.yml', '--repo',
-            'hemia-labs/identity', '--ref', 'main', '-f', 'operation=deploy',
-            '-f', 'release_tag=identity-v1.2.3'])
-        self.assertIn('Check the Identity deployment run', summary)
-
-    def test_disabled_or_missing_flag_does_not_dispatch(self):
-        for enabled in ['', 'false', 'TRUE']:
+    def test_automatic_deployment_requires_exact_true(self):
+        for enabled, expected in [('true', 'true'), ('', 'false'), ('false', 'false'), ('TRUE', 'false')]:
             with self.subTest(enabled=enabled):
-                result, calls, summary = self.run_dispatch(enabled)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIsNone(calls)
-                self.assertIn('disabled in prod', summary)
+                output, summary = self.run_gate(enabled)
+                self.assertEqual(output, 'deploy=' + expected)
+                if expected == 'false':
+                    self.assertIn('disabled in prod', summary)
 
-    def test_dispatch_failure_is_not_reported_as_success(self):
-        result, calls, summary = self.run_dispatch('true', gh_exit=1)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIsNotNone(calls)
-        self.assertNotIn('Automatic deployment requested', summary)
+    def test_manual_operations_reach_existing_configuration_validation(self):
+        for enabled in ['true', 'false', '']:
+            with self.subTest(enabled=enabled):
+                output, _ = self.run_gate(enabled, automatic='false')
+                self.assertEqual(output, 'deploy=true')
 
 
 if __name__ == '__main__':
