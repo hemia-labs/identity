@@ -43,7 +43,8 @@ for (const target of ['identity', 'auth']) {
       const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
       git('init', '-q', '-b', 'fixture'); git('add', '.');
       git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture');
-      git('branch', 'develop');
+      git('update-ref', 'refs/remotes/origin/develop', 'HEAD');
+      if (target === 'auth') git('branch', 'develop');
       writeFileSync(join(dir, '.changeset/app.md'), note);
       writeFileSync(join(dir, '.changeset/sdk.md'), '---\n"@hemia/auth": patch\n---\nSDK fix.\n');
       git('add', '.changeset');
@@ -51,6 +52,9 @@ for (const target of ['identity', 'auth']) {
       if (target === 'identity') {
         git('update-ref', 'refs/remotes/origin/main', 'HEAD');
         const workflow = readFileSync(join(root, '.github/workflows/identity-release.yml'), 'utf8');
+        const base = workflow.match(/^          (git branch develop origin\/develop)$/m)?.[1];
+        assert(base, 'Main checkout must prepare the configured Changesets base branch');
+        git(...base.split(' ').slice(1));
         const command = workflow.match(/bun run changeset (status[^\n]+)/)[1];
         const output = join(dir, 'status.json');
         const args = command.replace('"$RUNNER_TEMP/identity-status.json"', output).split(' ');
