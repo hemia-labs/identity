@@ -201,3 +201,40 @@ Secure/HttpOnly. Elimina sus propios
 contenedores y volumenes al terminar. No cubre Google, correo ni integracion con
 Access reales. Para futuras apps en la misma VM se pueden usar redes Docker
 compartidas de forma explicita; este Compose no expone el puerto del backend.
+
+## Backend runtime reducido
+
+El runtime conserva Debian Bookworm slim, glibc y el mismo binario Node 22 usado
+para compilar. Solo instala certificados CA y las bibliotecas de sistema de Node;
+no incluye npm, Yarn, Bun, compiladores ni cabeceras de desarrollo.
+
+La instalacion de dependencias sigue usando el lockfile y `--production`. Antes
+de copiarla al runtime se retiran source maps, declaraciones TypeScript y
+Markdown de dependencias, conservando archivos de licencia y avisos legales.
+No se elimina JavaScript ni se modifican los mapas del codigo propio de Identity.
+Los errores dentro de dependencias tendran ubicaciones en su JavaScript publicado,
+sin sus mapas originales. Se conservan TypeORM, su CLI, los modulos nativos y las
+migraciones compiladas; el arranque sigue sin ejecutar migraciones ni seeds.
+
+Comparacion local reproducida con `linux/amd64`, el mismo codigo `1.0.1` y Docker
+`overlay2`: imagen anterior 354836455 bytes (338.4 MiB), candidata 281117467 bytes
+(268.1 MiB), ahorro 73718988 bytes (70.3 MiB, 20.8%). Estas cifras son tamanos de
+imagen del mismo motor; no equivalen al total de capas comprimidas y snapshots
+que reporta `containerd` en apps. Las capas compartidas entre versiones tambien
+hacen que el ahorro de disco total dependa de las imagenes conservadas.
+
+Para comparar una candidata local y volver a la imagen anterior sin tocar el
+registry ni produccion:
+
+```bash
+python3 test/docker/smoke.py \
+  --backend-image identity-backend-size:candidate \
+  --rollback-image identity-backend-size:baseline
+```
+
+Ambas imagenes deben estar construidas localmente, y la imagen frontend de Compose
+debe existir. La prueba usa PostgreSQL temporal, aplica migraciones y seeds solo
+alli, valida el runtime reducido y realiza candidata -> anterior -> candidata,
+comprobando readiness, OIDC, JWKS y login tras cada reemplazo. El controlador de
+deploy/rollback se cubre adicionalmente con `python3 -m unittest discover -s test/deploy`.
+No cambia tags o digests existentes, y no elimina imagenes de rollback.
