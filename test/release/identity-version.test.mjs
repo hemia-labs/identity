@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, syml
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { identityChangeset, isIdentityVersionBatch } from '../../scripts/identity-version.mjs';
+import { identityChangeset, isIdentityVersionBatch, retryReleaseTag } from '../../scripts/identity-version.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const note = '---\n"backend": major\n---\nFirst application release.\n';
@@ -28,6 +28,31 @@ test('only a complete application version batch publishes', () => {
   assert.equal(identityChangeset('---\n"backend": minor\n"@hemia/auth": minor\n---\nMixed\n'), false);
 });
 
+test('explicit retry requires the exact committed stable version', () => {
+  assert.equal(retryReleaseTag('identity-v1.0.0', '1.0.0', '1.0.0'), 'identity-v1.0.0');
+  assert.throws(() => retryReleaseTag('identity-v1.0.1', '1.0.0', '1.0.0'), /committed version/);
+  assert.throws(() => retryReleaseTag('identity-v1.0.0', '1.0.0', '1.0.1'), /share a version/);
+  assert.throws(() => retryReleaseTag('identity-v1.0.0-rc.1', '1.0.0-rc.1', '1.0.0-rc.1'));
+  assert.throws(() => retryReleaseTag('identity-v1.0.0\nrelease=true', '1.0.0', '1.0.0'));
+});
+
+test('retry CLI emits release outputs only for the committed application version', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'identity-retry-'));
+  try {
+    const output = join(dir, 'output');
+    const version = JSON.parse(readFileSync(join(root, 'backend/package.json'))).version;
+    const tag = `identity-v${version}`;
+    execFileSync(process.execPath, [join(root, 'scripts/identity-version.mjs'), 'retry', tag], {
+      cwd: root, env: { ...process.env, GITHUB_OUTPUT: output }, stdio: 'pipe',
+    });
+    assert.equal(readFileSync(output, 'utf8'), `release=true\ntag=${tag}\n`);
+    assert.throws(() => execFileSync(process.execPath,
+      [join(root, 'scripts/identity-version.mjs'), 'retry', 'identity-v999999.0.0'], {
+        cwd: root, env: { ...process.env, GITHUB_OUTPUT: join(dir, 'invalid') }, stdio: 'pipe',
+      }));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 for (const target of ['identity', 'auth']) {
   test(`real Changesets versions ${target} without consuming the other release`, () => {
     const dir = mkdtempSync(join(tmpdir(), 'identity-version-'));
@@ -36,7 +61,7 @@ for (const target of ['identity', 'auth']) {
         mkdirSync(join(dir, directory), { recursive: true });
       }
       for (const path of ['package.json', 'bun.lock', 'backend/package.json', 'frontend/package.json',
-        'packages/auth/package.json', '.changeset/config.json', 'scripts/version-identity.mjs', 'scripts/version-auth.mjs']) {
+        'packages/auth/package.json', '.changeset/config.json', 'scripts/version-identity.mjs', 'scripts/version-auth.mjs', 'scripts/identity-version.mjs', 'scripts/auth-release.mjs']) {
         copyFileSync(join(root, path), join(dir, path));
       }
       symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
@@ -55,13 +80,13 @@ for (const target of ['identity', 'auth']) {
         const base = workflow.match(/^          (git branch develop origin\/develop)$/m)?.[1];
         assert(base, 'Main checkout must prepare the configured Changesets base branch');
         git(...base.split(' ').slice(1));
-        const command = workflow.match(/bun run changeset (status[^\n]+)/)[1];
-        const output = join(dir, 'status.json');
-        const args = command.replace('"$RUNNER_TEMP/identity-status.json"', output).split(' ');
-        execFileSync(process.execPath, [join(dir, 'node_modules/@changesets/cli/bin.js'), ...args], { cwd: dir, stdio: 'pipe' });
-        const status = JSON.parse(readFileSync(output));
-        assert(status.releases.some(r => r.name === 'backend'), 'Already merged app changesets must remain pending');
-        assert(status.releases.some(r => r.name === 'frontend'));
+        const command = workflow.match(/^          (node scripts\/identity-version.mjs pending)$/m)?.[1];
+        assert(command, 'Pending notes must be read independently of the Git base');
+        const output = join(dir, 'pending-output');
+        execFileSync(process.execPath, [join(dir, 'scripts/identity-version.mjs'), 'pending'], {
+          cwd: dir, env: { ...process.env, GITHUB_OUTPUT: output }, stdio: 'pipe',
+        });
+        assert.equal(readFileSync(output, 'utf8'), 'pending=true\n');
       }
       // Keep the installed dependency tree read-only; frozen installation runs in the full check suite.
       writeFileSync(join(dir, 'bin/bun'), '#!/bin/sh\ntest "$*" = "install --frozen-lockfile"\n', { mode: 0o755 });
@@ -72,6 +97,11 @@ for (const target of ['identity', 'auth']) {
       execFileSync(process.execPath, [join(dir, `scripts/version-${target}.mjs`)], {
         cwd: dir, env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` }, stdio: 'pipe',
       });
+      const pendingOutput = join(dir, 'pending-after-version');
+      execFileSync(process.execPath, [join(dir, 'scripts/identity-version.mjs'), 'pending'], {
+        cwd: dir, env: { ...process.env, GITHUB_OUTPUT: pendingOutput }, stdio: 'pipe',
+      });
+      assert.equal(readFileSync(pendingOutput, 'utf8'), `pending=${target === 'auth'}\n`);
       const appVersion = target === 'identity' ? nextMajor : appBefore;
       assert.equal(version('backend'), appVersion);
       assert.equal(version('frontend'), appVersion);

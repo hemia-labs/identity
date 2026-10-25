@@ -96,7 +96,6 @@ jobs:
           oauth-client-id: ${{ vars.TS_CLIENT_ID }}
           audience: ${{ vars.TS_AUDIENCE }}
           tags: tag:hemia-ci
-          args: --accept-routes
       - name: Deploy the selected release through SSH
         env:
           OPERATION: ${{ inputs.operation }}
