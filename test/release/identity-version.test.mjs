@@ -67,10 +67,12 @@ for (const target of ['identity', 'auth']) {
       writeFileSync(join(dir, 'bin/bun'), '#!/bin/sh\ntest "$*" = "install --frozen-lockfile"\n', { mode: 0o755 });
       const version = name => JSON.parse(readFileSync(join(dir, name, 'package.json'))).version;
       const sdkBefore = version('packages/auth');
+      const appBefore = version('backend');
+      const nextMajor = `${Number(appBefore.split('.')[0]) + 1}.0.0`;
       execFileSync(process.execPath, [join(dir, `scripts/version-${target}.mjs`)], {
         cwd: dir, env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` }, stdio: 'pipe',
       });
-      const appVersion = target === 'identity' ? '1.0.0' : before.backend;
+      const appVersion = target === 'identity' ? nextMajor : appBefore;
       assert.equal(version('backend'), appVersion);
       assert.equal(version('frontend'), appVersion);
       assert.equal(version('packages/auth') === sdkBefore, target === 'identity');
@@ -81,8 +83,8 @@ for (const target of ['identity', 'auth']) {
         assert(entry.includes(`"version": "${version(name)}"`));
       }
       if (target === 'identity') {
-        assert(readFileSync(join(dir, 'backend/CHANGELOG.md'), 'utf8').includes('## 1.0.0'));
-        assert(readFileSync(join(dir, 'frontend/CHANGELOG.md'), 'utf8').includes('## 1.0.0'));
+        assert(readFileSync(join(dir, 'backend/CHANGELOG.md'), 'utf8').includes(`## ${appVersion}`));
+        assert(readFileSync(join(dir, 'frontend/CHANGELOG.md'), 'utf8').includes(`## ${appVersion}`));
       }
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
