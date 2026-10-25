@@ -1,4 +1,4 @@
-name: identity-release.yml
+name: Identity release
 
 on:
   push:
@@ -32,7 +32,7 @@ jobs:
         run: node scripts/identity-version.mjs classify "$BASE_SHA"
 
   version-pr:
-    needs: classify
+    needs: [classify, checks]
     if: needs.classify.outputs.release != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -55,7 +55,7 @@ jobs:
       - name: Find pending Identity changesets
         id: changesets
         run: |
-          bun run changeset status --since origin/main --output "$RUNNER_TEMP/identity-status.json"
+          bun run changeset status --output "$RUNNER_TEMP/identity-status.json"
           node -e "const s=require(process.env.RUNNER_TEMP+'/identity-status.json'); require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, 'pending='+s.releases.some(r=>['backend','frontend'].includes(r.name))+'\n')"
       - name: Create a GitHub App token when configured
         id: app-token
@@ -81,10 +81,9 @@ jobs:
 
   checks:
     needs: classify
-    if: needs.classify.outputs.release == 'true'
     uses: ./.github/workflows/identity-ci.yml
     with:
-      preserve_images: true
+      preserve_images: ${{ needs.classify.outputs.release == 'true' }}
 
   publish:
     needs: [classify, checks]
