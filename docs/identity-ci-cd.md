@@ -467,3 +467,20 @@ o una referencia mutable. Al migrar a VPS puede conservarse el registry por
 Tailscale. Si cambia su nombre, planificar la conservacion de los nombres/digests
 utilizados por Releases anteriores; cambiar una variable no reescribe assets
 inmutables ni migra imagenes. Ver [private-registry.md](private-registry.md).
+
+## Reintentar una publicacion que no creo Release
+
+Tailscale GitHub Action v4 ya incorpora --accept-routes: no repetirlo en args.
+El publicador y el deploy usan sus valores predeterminados para aceptar rutas.
+
+Si una publicacion falla antes de crear la Release y requiere corregir CI,
+mergear la correccion revisada y usar Identity release > Run workflow desde main
+con release_tag igual a la version de ambos package.json (por ejemplo
+identity-v1.0.0). Se repiten pruebas/build, publicacion privada y comprobaciones
+de inmutabilidad. Se rechazan otras versiones y Releases ya existentes; no se
+mueven tags ni se reemplazan assets publicados. El deploy sigue sujeto a prod
+y ENABLE_IDENTITY_DEPLOY.
+
+La deteccion de notas pendientes lee los archivos Changesets de Identity sin
+comparar ramas. Tras una release es valido que no queden notas; eso debe omitir
+la PR de version, no fallar por diferencias historicas con develop.

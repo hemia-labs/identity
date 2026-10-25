@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { appendFileSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compareVersions } from './auth-release.mjs';
 
@@ -25,6 +25,27 @@ export function isIdentityVersionBatch(before, after, files, removedNotes) {
   const consumed = new Set(removedNotes.filter(note => identityChangeset(note.source)).map(note => note.path));
   return consumed.size > 0 && versionFiles.every(name => files.includes(name)) &&
     files.every(name => versionFiles.includes(name) || consumed.has(name));
+}
+
+export function retryReleaseTag(tag, backend, frontend) {
+  assert.equal(backend, frontend, 'Identity packages must share a version');
+  compareVersions(backend, frontend);
+  assert.equal(tag, `identity-v${backend}`, 'Retry tag must match the committed version');
+  return tag;
+}
+
+function pending() {
+  const found = readdirSync(join(root, '.changeset')).filter(name => name.endsWith('.md'))
+    .some(name => identityChangeset(readFileSync(join(root, '.changeset', name), 'utf8')));
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `pending=${found}\n`);
+  console.log(`Pending Identity changesets: ${found}`);
+}
+
+function retry(tag) {
+  const versions = ['backend', 'frontend'].map(name => JSON.parse(readFileSync(join(root, name, 'package.json'), 'utf8')).version);
+  retryReleaseTag(tag, ...versions);
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `release=true\ntag=${tag}\n`);
+  console.log(`Explicit unpublished release retry: ${tag}`);
 }
 
 function classify(base) {
@@ -56,9 +77,11 @@ function notes() {
   console.log(sections.join('\n\n') + '\n\n' + readFileSync(join(root, 'docs/release-notes.md'), 'utf8'));
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [command, argument] = process.argv.slice(2);
   if (command === 'classify') classify(argument);
   else if (command === 'notes') notes();
-  else throw new Error('Usage: node scripts/identity-version.mjs <classify BASE_SHA|notes>');
+  else if (command === 'pending') pending();
+  else if (command === 'retry') retry(argument);
+  else throw new Error('Usage: node scripts/identity-version.mjs <classify BASE_SHA|notes|pending|retry TAG>');
 }
