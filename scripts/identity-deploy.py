@@ -13,7 +13,9 @@ import subprocess
 import urllib.request
 
 
-def read_manifest(directory):
+def read_manifest(directory, registry_host='registry.tail41610c.ts.net'):
+    if not re.fullmatch(r'[a-z0-9]+(?:[.-][a-z0-9]+)*', registry_host):
+        raise ValueError('Invalid registry hostname')
     directory = Path(directory)
     data = json.loads((directory / 'release.json').read_text())
     if data.get('schema') != 1 or not re.fullmatch(r'identity-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', data.get('tag', '')):
@@ -25,6 +27,8 @@ def read_manifest(directory):
         for name, value in data['migrations'].items()
     ):
         raise ValueError('Invalid migration manifest')
+    if data.get('registry') != registry_host:
+        raise ValueError('Release uses an unexpected registry')
     for name in ['compose.json', 'identity-deploy.py']:
         if hashlib.sha256((directory / name).read_bytes()).hexdigest() != data['files'][name]:
             raise ValueError('Invalid release checksum: ' + name)
@@ -33,7 +37,7 @@ def read_manifest(directory):
         raise ValueError('Unexpected services')
     for service in ['backend', 'frontend']:
         image = data['images'][service]
-        if not re.fullmatch(r'ghcr\.io/hemia-labs/identity-' + service + r'@sha256:[a-f0-9]{64}', image):
+        if not re.fullmatch(re.escape(registry_host) + '/identity/' + service + r'@sha256:[a-f0-9]{64}', image):
             raise ValueError('Unpinned or unexpected image')
         if compose['services'][service].get('build') or compose['services'][service]['image'] != image:
             raise ValueError('Compose and manifest disagree')
@@ -58,9 +62,10 @@ def link(root, name, target):
 
 def perform(root, bundle, operation, acknowledge_schema=False, backup_confirmed=False):
     root = Path(root).resolve()
-    incoming = read_manifest(bundle)
     shared = root / 'shared'
     settings = json.loads((shared / 'host.json').read_text())
+    registry_host = settings['registry_host']
+    incoming = read_manifest(bundle, registry_host)
     bind = str(ipaddress.ip_address(settings['bind_address']))
     port = int(settings.get('http_port', 8080))
     if not 1 <= port <= 65535:
@@ -78,7 +83,7 @@ def perform(root, bundle, operation, acknowledge_schema=False, backup_confirmed=
     release = root / 'releases' / incoming['tag']
     release.parent.mkdir(parents=True, exist_ok=True)
     if release.exists():
-        if read_manifest(release) != incoming:
+        if read_manifest(release, registry_host) != incoming:
             raise ValueError('Refusing to overwrite an existing release')
     else:
         staging = release.with_name('.' + incoming['tag'] + '.incoming')
@@ -87,7 +92,7 @@ def perform(root, bundle, operation, acknowledge_schema=False, backup_confirmed=
         shutil.copytree(bundle, staging)
         staging.rename(release)
     current = (root / 'current').resolve() if (root / 'current').exists() else None
-    old = read_manifest(current) if current else None
+    old = read_manifest(current, registry_host) if current else None
     if old:
         if operation == 'deploy' and version(incoming['tag']) < version(old['tag']):
             raise ValueError('Use rollback to deploy an older release')

@@ -1,5 +1,6 @@
 {
   "bind_address": "192.168.100.102",
   "http_port": 8080,
-  "public_url": "https://id.hemia.cloud"
+  "public_url": "https://id.hemia.cloud",
+  "registry_host": "registry.tail41610c.ts.net"
 }

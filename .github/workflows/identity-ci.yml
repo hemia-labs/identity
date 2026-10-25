@@ -6,16 +6,12 @@ on:
   push:
     branches: [develop]
   workflow_call:
-    inputs:
-      preserve_images:
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: identity-ci-${{ inputs.preserve_images && github.run_id || github.event.pull_request.number || github.ref }}
+  group: identity-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,16 +31,3 @@ jobs:
           bun-version: '1.3.14'
       - name: Test Identity and its production images
         run: bash scripts/identity-checks.sh
-      - name: Preserve validated images for the release job
-        if: inputs.preserve_images
-        run: |
-          mkdir -p "$RUNNER_TEMP/identity-images"
-          docker save hemia-identity-backend:local hemia-identity-frontend:local -o "$RUNNER_TEMP/identity-images/images.tar"
-      - name: Upload the exact validated images
-        if: inputs.preserve_images
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: identity-images
-          path: ${{ runner.temp }}/identity-images/images.tar
-          compression-level: 0
-          retention-days: 2

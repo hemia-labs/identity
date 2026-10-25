@@ -14,7 +14,7 @@ el SDK `@hemia/auth` en `develop` y la aplicacion Identity en `main`.
    actualiza ambas versiones, ambos changelogs y `bun.lock`. No despliega aun.
 3. Al fusionar esa PR de version a `main`, se ejecuta CI completo y se conservan
    las imagenes probadas. Si pasa, se genera automaticamente el tag
-   `identity-vMAJOR.MINOR.PATCH`, se publican las imagenes GHCR y la Release inmutable
+   `identity-vMAJOR.MINOR.PATCH`, se publican las imagenes en el registry privado y la Release inmutable
    con sus assets. No hay que crear ni empujar tags manualmente.
 4. Tras publicar, un job con environment `prod` lee `ENABLE_IDENTITY_DEPLOY`.
    Si vale exactamente `true`, solicita `Identity deployment` desde `main` con
@@ -77,7 +77,7 @@ Secrets del mismo environment:
 | `DEPLOY_SSH_KNOWN_HOSTS` | Entrada `known_hosts` de apps, verificada por un canal confiable |
 
 No se necesita `BACKEND_ENV`, token Cloudflare ni secreto OAuth Tailscale en este
-workflow. `GITHUB_TOKEN` lo proporciona GitHub: publica GHCR y crea la Release con
+workflow. `GITHUB_TOKEN` lo proporciona GitHub: crea la Release con
 permisos limitados al job de publicacion. El job de despliegue solo lee contenido y
 solicita OIDC. El job que solicita deploy automatico tiene unicamente
 `actions: write` para despachar el workflow; no solicita OIDC ni usa secretos SSH.
@@ -226,15 +226,21 @@ El secret `DEPLOY_SSH_KNOWN_HOSTS` debe tener esta forma, con la clave real:
 Para puerto distinto de 22 usar `[host]:puerto`. No usar
 `StrictHostKeyChecking=no` ni confiar un `ssh-keyscan` sin verificarlo.
 
-Los paquetes `ghcr.io/hemia-labs/identity-backend` e `identity-frontend` son
-publicos: apps descarga sus imagenes sin login ni PAT. El workflow publica con
-`GITHUB_TOKEN`, comprueba visibilidad publica y verifica acceso anonimo antes de
-crear la Release. Ambos Dockerfiles vinculan las imagenes al repositorio mediante
-`org.opencontainers.image.source`; comprobar que `identity` conserve acceso de
-Actions para publicar. El tag `registry-bootstrap` solo inicializa los paquetes
-con una imagen vacia: no es una version ejecutable ni debe usarse para deploy.
-Los despliegues usan exclusivamente los digests de Releases inmutables.
-[Visibilidad GHCR](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
+Las imagenes se publican en `registry.tail41610c.ts.net/identity/backend` y
+`registry.tail41610c.ts.net/identity/frontend`. El registry es privado, requiere
+Tailscale, TLS y autenticacion. No se suben imagenes ni artifacts de imagen a
+GitHub: se construyen y prueban en el mismo job que las publica directamente.
+GitHub conserva tags, changelogs, Releases inmutables y assets de despliegue.
+
+En el environment `prod` configurar `REGISTRY_HOST`, `REGISTRY_USERNAME` y el
+secret `REGISTRY_PASSWORD`. La credencial de CI puede publicar; la de apps solo
+puede consultar y descargar (GET/HEAD). Esta ultima vive en el Docker config de
+`identity-deploy`, modo 600, y se conserva para deploy y rollback. No transferir
+la credencial de escritura al servidor de aplicaciones.
+
+El job publicador usa environment `prod`, OIDC y tag `hemia-ci`; su permiso de red
+al registry es unicamente TCP 443. Se conserva el acceso SSH a apps. No se usa
+`packages: write`, GHCR, `insecure-registries` ni certificados sin validar.
 
 Crear estos archivos propiedad del usuario dedicado:
 
@@ -331,12 +337,11 @@ version `1.0.0`. Revisar esa PR y fusionarla; el tag y la Release se generan sol
 Para versiones siguientes, incluir un changeset en la PR funcional y actualizar
 `docs/release-notes.md` cuando cambien las instrucciones operativas o migraciones.
 
-`identity-release.yml` crea los paquetes GHCR y adjunta `release.json`, `compose.json`
+`identity-release.yml` publica las imagenes privadas y adjunta `release.json`, `compose.json`
 y `identity-deploy.py`. El manifiesto fija commit, digests, hashes de assets y
 contenido del conjunto de migraciones. Se valida tanto en runner como en host.
-Las dos imagenes proceden del smoke test de la misma ejecucion, no de un rebuild.
-Las imagenes Docker se conservan 2 dias como artifact intermedio; las referencias
-para despliegue son GHCR y los assets de Release, no ese artifact temporal.
+Las dos imagenes proceden del smoke test del mismo job que las publica.
+No se transfieren a otro job ni se almacenan como artifacts en GitHub.
 
 Con `prod.ENABLE_IDENTITY_DEPLOY=true`, la publicacion solicita automaticamente
 `deploy` para esa Release. Revisar tambien la ejecucion **Identity deployment**:
@@ -393,7 +398,7 @@ de imagenes. Incluso con el mismo conjunto de migraciones, cambios manuales de
 base o sistemas externos pueden impedir recuperar el servicio.
 
 No elimina imagenes automaticamente: mantener las referencias de releases
-soportadas en GHCR. Cualquier limpieza futura debe respetar current/previous y la
+soportadas en el registry privado. Cualquier limpieza futura debe respetar current/previous y la
 ventana de rollback. Hay una interrupcion breve al reemplazar contenedores; no es
 blue/green ni un despliegue sin corte.
 
@@ -436,9 +441,10 @@ exigiendo respuestas exitosas y contenido valido despues del arranque.
 
 ## Orden de CI en main
 
-En main, `Identity release` llama al workflow reutilizable `Identity CI` y espera
-a que termine. Solo despues crea/actualiza la PR de version o publica una version
-revisada y solicita su deploy. `Identity CI` conserva su ejecucion independiente
+En main, `Identity release` ejecuta los checks antes de crear la PR de version.
+Cuando se fusiona la version, el job publicador ejecuta los mismos checks y
+construye las imagenes antes de publicar y solicitar deploy. Asi cada ejecucion
+construye una sola vez, sin almacenar imagenes en GitHub. `Identity CI` conserva su ejecucion independiente
 para PR y pushes a develop; no se duplica como otro push a main.
 
 El job de version consulta todos los changesets pendientes sin `--since`: despues
@@ -452,3 +458,12 @@ porque es la base configurada para el SDK compartido. Esto no filtra ni consume
 los changesets pendientes de Identity y no modifica ninguna rama remota.
 La prueba del job reproduce un checkout con origin/main y origin/develop, sin
 rama local develop.
+
+## Registry privado y portabilidad
+
+`host.json` contiene `registry_host`, y `prod.REGISTRY_HOST` debe coincidir. El
+manifiesto guarda ese host y los digests; ambos validadores rechazan otro registry
+o una referencia mutable. Al migrar a VPS puede conservarse el registry por
+Tailscale. Si cambia su nombre, planificar la conservacion de los nombres/digests
+utilizados por Releases anteriores; cambiar una variable no reescribe assets
+inmutables ni migra imagenes. Ver [private-registry.md](private-registry.md).
