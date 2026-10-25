@@ -18,9 +18,21 @@ RUN cd backend && bun run build
 # A fresh install prevents development dependencies leaking into runtime.
 FROM dependencies AS production-dependencies
 RUN bun install --frozen-lockfile --production --filter backend \
-    && mkdir -p backend/node_modules
+    && mkdir -p backend/node_modules \
+    && find /app/node_modules -type f \( -name '*.map' -o -name '*.d.ts' \
+        -o -name '*.d.mts' -o -name '*.d.cts' -o -iname '*.md' \
+        -o -iname '*.markdown' -o -name '*.tsbuildinfo' \) \
+        ! -iname 'license*' ! -iname 'copying*' ! -iname 'notice*' \
+        ! -iname 'copyright*' -delete
 
-FROM node:22-bookworm-slim AS runtime
+# Keep Debian/glibc and the same Node binary, without npm, Yarn or Node headers.
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libatomic1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 node \
+    && useradd --uid 1000 --gid node --create-home --shell /bin/sh node
+COPY --from=dependencies /usr/local/bin/node /usr/local/bin/node
 LABEL org.opencontainers.image.source="https://github.com/hemia-labs/identity"
 ENV NODE_ENV=production PORT=4000 APP_BIND_HOST=0.0.0.0
 WORKDIR /app/backend

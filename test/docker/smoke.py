@@ -1,4 +1,5 @@
 """Exercise built images with disposable PostgreSQL; never uses deployment env files."""
+import argparse
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,10 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--backend-image', help='Use a locally built backend candidate')
+parser.add_argument('--rollback-image', help='Also replace candidate with this local baseline and restore it')
+args = parser.parse_args()
 
 with tempfile.TemporaryDirectory(prefix='identity-docker-') as directory:
     directory = Path(directory)
@@ -34,14 +39,17 @@ with tempfile.TemporaryDirectory(prefix='identity-docker-') as directory:
     env_file.write_text(''.join(f'{key}={value}\n' for key, value in config.items()))
     env_file.chmod(0o600)
     override = directory / 'compose.json'
-    override.write_text(json.dumps({'services': {'smoke-db': {
+    overrides = {'services': {'smoke-db': {
         'image': 'postgres:18-alpine',
         'environment': {'POSTGRES_USER': 'identity', 'POSTGRES_PASSWORD': password,
                         'POSTGRES_DB': 'identity'},
         'tmpfs': ['/var/lib/postgresql'],
         'healthcheck': {'test': ['CMD-SHELL', 'pg_isready -U identity'],
                         'interval': '1s', 'timeout': '3s', 'retries': 30},
-    }, 'backend': {'depends_on': {'smoke-db': {'condition': 'service_healthy'}}}}}))
+    }, 'backend': {'depends_on': {'smoke-db': {'condition': 'service_healthy'}}}}}
+    if args.backend_image:
+        overrides['services']['backend']['image'] = args.backend_image
+    override.write_text(json.dumps(overrides))
     environment = {**os.environ, 'IDENTITY_ENV_FILE': str(env_file),
                    'IDENTITY_BIND_ADDRESS': '127.0.0.1', 'IDENTITY_HTTP_PORT': '0'}
     compose = ['docker', 'compose', '--env-file', '/dev/null', '-p',
@@ -68,6 +76,8 @@ with tempfile.TemporaryDirectory(prefix='identity-docker-') as directory:
             capture=True, quiet_failure=quiet_failure)
 
     try:
+        print(run('run', '--rm', '--no-deps', 'backend', 'node', '-e',
+            (ROOT / 'test/docker/backend-runtime.cjs').read_text(), capture=True), end='', flush=True)
         run('up', '-d', '--no-build', 'backend')
         for attempt in range(60):
             try:
@@ -109,6 +119,18 @@ with tempfile.TemporaryDirectory(prefix='identity-docker-') as directory:
         }).catch(e => {console.error(e); process.exit(1)})"""
         run('exec', '-T', 'backend', 'node', '-e', login, capture=True)
         print('PASS: manual migrations/seeds, readiness, SPA, OAuth/OIDC, JWKS and secure login', flush=True)
+        if args.rollback_image:
+            candidate = json.loads(run('config', '--format', 'json', capture=True))['services']['backend']['image']
+            for image in [args.rollback_image, candidate]:
+                overrides['services']['backend']['image'] = image
+                override.write_text(json.dumps(overrides))
+                run('up', '-d', '--no-build', '--wait', '--wait-timeout', '90')
+                check_http('frontend', '/api/v1/health/ready', "r.status===200 && body.status==='ok'")
+                check_http('frontend', '/.well-known/openid-configuration',
+                           "r.status===200 && body.issuer==='https://id.example.test'")
+                check_http('frontend', '/.well-known/jwks.json', 'r.status===200 && body.keys.length>0')
+                run('exec', '-T', 'backend', 'node', '-e', login, capture=True)
+                print('PASS: local image replacement, health and login: ' + image, flush=True)
         run('stats', '--no-stream')
     finally:
         run('down', '-v', '--remove-orphans')
