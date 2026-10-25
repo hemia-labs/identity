@@ -2,7 +2,9 @@ import { z } from 'zod'
 
 export const loginSchema = z.object({
   email: z.email('Correo invalido'),
-  password: z.string().min(8, 'Minimo 8 caracteres'),
+  password: z.string({ error: 'Ingresa tu contrasena' })
+    .min(1, 'Ingresa tu contrasena')
+    .min(8, 'Minimo 8 caracteres'),
 })
 
 export const registerSchema = z
