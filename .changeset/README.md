@@ -1,7 +1,21 @@
 # Changesets de Identity
 
-`@hemia/auth` es el paquete público de este workspace. Las apps `backend` y `frontend` son privadas. Los PR de código o API pública del paquete deben incluir un changeset generado con `bun run changeset` y dirigido a `@hemia/auth`, con impacto `patch`, `minor` o `major` según SemVer. Los cambios solo de tests o de documentación fuera del paquete pueden usar `bun run changeset --empty` si CI requiere una entrada.
+La aplicacion privada `backend` + `frontend` comparte version; `@hemia/auth`
+conserva su version y publicacion npm independiente.
 
-La versión 1.0.8 de la rama de preparación ya se fijó antes de instalar Changesets. Su changeset vacío registra ese punto de partida sin pedir otra subida de versión. Para versiones posteriores, `bun run changeset version` actualizará versión y changelog en un PR de versión revisado; el workflow `release-auth.yml` publica únicamente tras fusionar un PR exclusivo de versión, validar el tarball y habilitar `ENABLE_NPM_PUBLISH=true`.
+- Aplicacion: agregar `bun run changeset` dirigido a `backend` o `frontend`.
+  El merge a `main` crea/actualiza la PR de version. Fusionar esa PR genera
+  tag `identity-vX.Y.Z`, Release e imagenes; despliega si
+  `prod.ENABLE_IDENTITY_DEPLOY=true`. Rollback y migraciones son manuales.
+- SDK: agregar un changeset dirigido a `@hemia/auth`. El flujo de `develop`
+  mantiene la PR de version y publicacion npm con environment `npm` y
+  `ENABLE_NPM_PUBLISH=true`.
 
-El estado local de preparación es 1.0.9. El changeset `auth-machine-client.md` solicita minor y producirá 1.1.0 con MachineClient; no subas manualmente otra vez esa versión. Payments debe publicarse después de esa release. La publicación requiere el environment `npm`, Trusted Publisher `hemia-labs/identity` + `release-auth.yml` + environment `npm` y la variable `ENABLE_NPM_PUBLISH`. Los ajustes remotos no se verificaron en esta preparación.
+Usar archivos changeset separados para SDK y aplicacion, incluso en una PR que
+cambie ambos. Los scripts de version ignoran el otro destino para conservar sus
+notas pendientes. No ejecutar `changeset version` directamente para publicar:
+las PR automaticas usan `version:identity` o `version:auth`, que tambien actualizan
+las versiones del lockfile sin recalcular dependencias.
+
+Ver [CI/CD de Identity](../docs/identity-ci-cd.md) para requisitos de GitHub,
+Tailscale y servidor. Nunca incluir secretos en un changeset.

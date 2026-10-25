@@ -27,23 +27,11 @@ export const envValidationSchema = Joi.object({
   DB_RETRY_ATTEMPTS: Joi.number().min(0).default(3),
   DB_RETRY_DELAY: Joi.number().min(0).default(3000),
 
-  SMTP_HOST: Joi.string().when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().required(),
-    otherwise: Joi.string().allow('').default(''),
-  }),
+  SMTP_HOST: Joi.string().empty('').optional(),
   SMTP_PORT: Joi.number().port().default(587),
   SMTP_SECURE: Joi.boolean().truthy('true').falsy('false').default(false),
-  SMTP_USER: Joi.string().when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().required(),
-    otherwise: Joi.string().allow('').default(''),
-  }),
-  SMTP_PASS: Joi.string().when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().required(),
-    otherwise: Joi.string().allow('').default(''),
-  }),
+  SMTP_USER: Joi.string().empty('').optional(),
+  SMTP_PASS: Joi.string().empty('').optional(),
   EMAIL_FROM_APP: Joi.string().default('Hemia ID'),
   ACCESS_API_URL: Joi.string().uri().required(),
   ACCESS_JWKS_URI: Joi.string().uri().required(),
@@ -81,16 +69,14 @@ export const envValidationSchema = Joi.object({
   // JWKS_KEY_KID / JWKS_PRIVATE_KEY_PATH are seed-only (app reads the active key from the DB).
   JWKS_PRIVATE_KEY: Joi.string().allow('').default(''),
 
-  GOOGLE_CLIENT_ID: Joi.string().when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().required(),
-    otherwise: Joi.string().allow('').default(''),
-  }),
-  GOOGLE_CLIENT_SECRET: Joi.string().when('NODE_ENV', {
-    is: 'production',
-    then: Joi.string().required().invalid('dummy_google_client_secret'),
-    otherwise: Joi.string().allow('').default(''),
-  }),
+  GOOGLE_CLIENT_ID: Joi.string().empty('').optional(),
+  GOOGLE_CLIENT_SECRET: Joi.string()
+    .empty('')
+    .optional()
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.string().invalid('dummy_google_client_secret'),
+    }),
   GOOGLE_CALLBACK_URL: Joi.string()
     .uri({ allowRelative: false })
     .default('http://localhost:3000/api/v1/auth/google/callback'),
@@ -100,4 +86,6 @@ export const envValidationSchema = Joi.object({
   COOKIE_SAME_SITE: Joi.string().valid('strict', 'lax', 'none').default('lax'),
   COOKIE_ACCESS_TOKEN_MAX_AGE_SECONDS: Joi.number().min(60).default(900),
   COOKIE_REFRESH_TOKEN_MAX_AGE_SECONDS: Joi.number().min(60).default(2592000),
-});
+})
+  .and('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET')
+  .and('SMTP_HOST', 'SMTP_USER', 'SMTP_PASS');

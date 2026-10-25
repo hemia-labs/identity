@@ -33,11 +33,17 @@ export class MailService {
 
   constructor(
     @Inject(EMAIL_SENDER_CLIENT)
-    private readonly emailSender: EmailSender,
+    private readonly emailSender: EmailSender | null,
     private readonly configService: ConfigService,
   ) {}
 
   async send(input: SendMailInput) {
+    if (!this.emailSender) {
+      throw new ServiceUnavailableException({
+        code: 'EMAIL_NOT_CONFIGURED',
+        message: 'Email delivery is not configured',
+      });
+    }
     try {
       const result: unknown = await this.emailSender.sendEmail({
         ...input,

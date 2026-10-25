@@ -10,7 +10,7 @@ const lockFile = join(root, 'bun.lock');
 const version = () => JSON.parse(readFileSync(packageFile, 'utf8')).version;
 const before = version();
 
-execFileSync(process.execPath, [join(root, 'node_modules/@changesets/cli/bin.js'), 'version'], {
+execFileSync(process.execPath, [join(root, 'node_modules/@changesets/cli/bin.js'), 'version', '--ignore', 'backend', '--ignore', 'frontend'], {
   cwd: root, stdio: 'inherit',
 });
 
