@@ -433,3 +433,15 @@ la autenticacion.
 Validado desde apps para las tres rutas publicas. Mientras no haya contenedores
 escuchando en apps:8080, la respuesta esperada es 502; el controlador seguira
 exigiendo respuestas exitosas y contenido valido despues del arranque.
+
+## Orden de CI en main
+
+En main, `Identity release` llama al workflow reutilizable `Identity CI` y espera
+a que termine. Solo despues crea/actualiza la PR de version o publica una version
+revisada y solicita su deploy. `Identity CI` conserva su ejecucion independiente
+para PR y pushes a develop; no se duplica como otro push a main.
+
+El job de version consulta todos los changesets pendientes sin `--since`: despues
+del merge, origin/main ya coincide con HEAD y ese filtro ocultaria las notas
+pendientes que acaban de fusionarse. La validacion de PR puede seguir usando
+`--since` contra su base para verificar las notas aportadas por la PR.

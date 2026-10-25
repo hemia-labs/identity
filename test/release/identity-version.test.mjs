@@ -46,6 +46,19 @@ for (const target of ['identity', 'auth']) {
       git('branch', 'develop');
       writeFileSync(join(dir, '.changeset/app.md'), note);
       writeFileSync(join(dir, '.changeset/sdk.md'), '---\n"@hemia/auth": patch\n---\nSDK fix.\n');
+      git('add', '.changeset');
+      git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'merge pending changesets');
+      if (target === 'identity') {
+        git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+        const workflow = readFileSync(join(root, '.github/workflows/identity-release.yml'), 'utf8');
+        const command = workflow.match(/bun run changeset (status[^\n]+)/)[1];
+        const output = join(dir, 'status.json');
+        const args = command.replace('"$RUNNER_TEMP/identity-status.json"', output).split(' ');
+        execFileSync(process.execPath, [join(dir, 'node_modules/@changesets/cli/bin.js'), ...args], { cwd: dir, stdio: 'pipe' });
+        const status = JSON.parse(readFileSync(output));
+        assert(status.releases.some(r => r.name === 'backend'), 'Already merged app changesets must remain pending');
+        assert(status.releases.some(r => r.name === 'frontend'));
+      }
       // Keep the installed dependency tree read-only; frozen installation runs in the full check suite.
       writeFileSync(join(dir, 'bin/bun'), '#!/bin/sh\ntest "$*" = "install --frozen-lockfile"\n', { mode: 0o755 });
       const version = name => JSON.parse(readFileSync(join(dir, name, 'package.json'))).version;
