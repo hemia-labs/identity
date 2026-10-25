@@ -2,6 +2,23 @@ name: Identity deployment
 run-name: Identity ${{ inputs.operation }} ${{ inputs.release_tag }}
 
 on:
+  workflow_call:
+    inputs:
+      operation:
+        type: string
+        default: deploy
+      release_tag:
+        type: string
+        required: true
+      automatic:
+        type: boolean
+        default: false
+      acknowledge_schema:
+        type: boolean
+        default: false
+      backup_confirmation:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       operation:
@@ -29,8 +46,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  enabled:
     if: github.repository == 'hemia-labs/identity' && github.ref == 'refs/heads/main'
+    environment: prod
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      deploy: ${{ steps.check.outputs.deploy }}
+    steps:
+      - name: Check automatic deployment setting in prod
+        id: check
+        env:
+          AUTOMATIC: ${{ inputs.automatic || false }}
+          ENABLE_DEPLOY: ${{ vars.ENABLE_IDENTITY_DEPLOY }}
+        run: |
+          if [[ "$AUTOMATIC" == 'true' && "$ENABLE_DEPLOY" != 'true' ]]; then
+            echo 'deploy=false' >> "$GITHUB_OUTPUT"
+            echo 'Release published. Automatic deployment is disabled in prod.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: enabled
+    if: needs.enabled.outputs.deploy == 'true'
     environment: prod
     runs-on: ubuntu-24.04
     timeout-minutes: 20
