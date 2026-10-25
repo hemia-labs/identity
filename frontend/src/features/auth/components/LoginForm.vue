@@ -22,11 +22,17 @@ const errorMessage = computed(() => loginMutation.error.value ? getErrorMessage(
 const showPassword = ref(false)
 
 async function submit(values: GenericObject) {
-  const result = await loginMutation.mutateAsync({
-    identifier: String(values.email),
-    password: String(values.password),
-    deviceName: window.navigator.userAgent.slice(0, 160),
-  })
+  let result
+  try {
+    result = await loginMutation.mutateAsync({
+      identifier: String(values.email),
+      password: String(values.password),
+      deviceName: window.navigator.userAgent.slice(0, 160),
+    })
+  } catch {
+    // The mutation error is displayed in the form alert.
+    return
+  }
   authStore.markAuthenticated(result.session.sessionId)
 
   const returnTo = typeof route.query.returnTo === 'string' ? route.query.returnTo : null

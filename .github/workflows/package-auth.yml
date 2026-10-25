@@ -39,8 +39,14 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node scripts/auth-release.mjs classify "$BASE_SHA"
+      - name: Identify an Identity version-only PR
+        id: identity-version-pr
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/identity-version.mjs classify "$BASE_SHA"
       - name: Verify Changesets on PRs
-        if: github.event_name == 'pull_request' && steps.version-pr.outputs.release != 'true'
+        if: github.event_name == 'pull_request' && steps.version-pr.outputs.release != 'true' && steps.identity-version-pr.outputs.release != 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bun run changeset status --since "$BASE_SHA"

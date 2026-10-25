@@ -3,7 +3,6 @@ dist/
 coverage/
 .env
 .env.*
-!.env.example
 *.log
 .DS_Store
 hemia_id_backend.md
@@ -20,3 +19,6 @@ AGENTS.md
 .codex/
 # Reproducible workspace dependencies
 !bun.lock
+
+# Python deployment checks
+__pycache__/

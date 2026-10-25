@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ExecutionContext,
   Injectable,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
@@ -16,6 +17,16 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     private readonly configService: ConfigService,
   ) {
     super();
+  }
+
+  canActivate(context: ExecutionContext) {
+    if (
+      !this.configService.get<string>('GOOGLE_CLIENT_ID') ||
+      !this.configService.get<string>('GOOGLE_CLIENT_SECRET')
+    ) {
+      throw new ServiceUnavailableException('Google sign-in is not configured');
+    }
+    return super.canActivate(context);
   }
 
   getAuthenticateOptions(context: ExecutionContext): { state?: string } {

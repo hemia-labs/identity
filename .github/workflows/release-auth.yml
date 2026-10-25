@@ -55,7 +55,7 @@ jobs:
         id: changesets
         run: |
           bun run changeset status --output "$RUNNER_TEMP/changeset-status.json"
-          node -e "const s=require(process.env.RUNNER_TEMP+'/changeset-status.json'); require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, 'pending='+(s.releases.length>0)+'\n')"
+          node -e "const s=require(process.env.RUNNER_TEMP+'/changeset-status.json'); require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, 'pending='+(s.releases.some(r=>r.name==='@hemia/auth'))+'\n')"
       - name: Create a GitHub App token when configured
         id: app-token
         if: steps.changesets.outputs.pending == 'true' && vars.RELEASE_APP_CLIENT_ID != ''
