@@ -445,3 +445,10 @@ El job de version consulta todos los changesets pendientes sin `--since`: despue
 del merge, origin/main ya coincide con HEAD y ese filtro ocultaria las notas
 pendientes que acaban de fusionarse. La validacion de PR puede seguir usando
 `--since` contra su base para verificar las notas aportadas por la PR.
+
+El checkout del runner sobre main solo crea referencias remotas para develop.
+Antes de consultar Changesets se crea la rama local develop desde origin/develop,
+porque es la base configurada para el SDK compartido. Esto no filtra ni consume
+los changesets pendientes de Identity y no modifica ninguna rama remota.
+La prueba del job reproduce un checkout con origin/main y origin/develop, sin
+rama local develop.
