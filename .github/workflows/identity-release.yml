@@ -1,0 +1,166 @@
+name: identity-release.yml
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: identity-release-main
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  classify:
+    if: github.repository == 'hemia-labs/identity' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      release: ${{ steps.batch.outputs.release }}
+      tag: ${{ steps.batch.outputs.tag }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Identify an Identity version-only merge
+        id: batch
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: node scripts/identity-version.mjs classify "$BASE_SHA"
+
+  version-pr:
+    needs: classify
+    if: needs.classify.outputs.release != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.3.14'
+      - run: bun install --frozen-lockfile
+      - name: Find pending Identity changesets
+        id: changesets
+        run: |
+          bun run changeset status --since origin/main --output "$RUNNER_TEMP/identity-status.json"
+          node -e "const s=require(process.env.RUNNER_TEMP+'/identity-status.json'); require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, 'pending='+s.releases.some(r=>['backend','frontend'].includes(r.name))+'\n')"
+      - name: Create a GitHub App token when configured
+        id: app-token
+        if: steps.changesets.outputs.pending == 'true' && vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: identity
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Create or update the Identity version PR
+        if: steps.changesets.outputs.pending == 'true'
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1 for CLI 2
+        with:
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
+          version: bun run version:identity
+          title: 'chore(identity): release application version'
+          commit: 'chore(identity): release application version'
+          commitMode: github-api
+          createGithubReleases: false
+
+  checks:
+    needs: classify
+    if: needs.classify.outputs.release == 'true'
+    uses: ./.github/workflows/identity-ci.yml
+    with:
+      preserve_images: true
+
+  publish:
+    needs: [classify, checks]
+    if: needs.classify.outputs.release == 'true'
+    outputs:
+      release_tag: ${{ needs.classify.outputs.tag }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Load the exact images validated by CI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: identity-images
+          path: ${{ runner.temp }}/identity-images
+      - name: Publish images and immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.classify.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo 'Release already exists. Redeploy its assets instead of rebuilding.' >&2
+            exit 1
+          fi
+          docker load -i "$RUNNER_TEMP/identity-images/images.tar"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          mkdir -p "$RUNNER_TEMP/identity-anonymous-docker"
+          for service in backend frontend; do
+            image="ghcr.io/hemia-labs/identity-$service:$RELEASE_TAG"
+            docker tag "hemia-identity-$service:local" "$image"
+            docker push "$image"
+            gh api "orgs/hemia-labs/packages/container/identity-$service" \
+              --jq 'if .visibility != "public" then error("Identity images must be public before deployment") else .name end'
+            docker --config "$RUNNER_TEMP/identity-anonymous-docker" manifest inspect "$image" >/dev/null
+          done
+          python3 scripts/identity-release.py create "$RELEASE_TAG" "$RUNNER_TEMP/identity-release"
+          node scripts/identity-version.mjs notes > "$RUNNER_TEMP/identity-release-notes.md"
+          if git rev-parse --verify "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
+          fi
+          gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --draft \
+            --title "Identity ${RELEASE_TAG#identity-v}" --notes-file "$RUNNER_TEMP/identity-release-notes.md"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/identity-release/"*
+          gh release edit "$RELEASE_TAG" --draft=false
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+            --jq 'if .immutable != true then error("Enable release immutability before publishing Identity releases") else .tag_name end'
+          echo "Release ready: $RELEASE_TAG. The next job checks whether automatic deployment is enabled in prod." >> "$GITHUB_STEP_SUMMARY"
+
+  auto-deploy:
+    needs: publish
+    environment: prod
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch deployment when enabled in prod
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.publish.outputs.release_tag }}
+          ENABLE_DEPLOY: ${{ vars.ENABLE_IDENTITY_DEPLOY }}
+        run: |
+          set -euo pipefail
+          if [[ "$ENABLE_DEPLOY" != 'true' ]]; then
+            echo "Release $RELEASE_TAG published. Automatic deployment is disabled in prod." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Explicit dispatch works with GITHUB_TOKEN and keeps deployment OIDC on main.
+          gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f operation=deploy -f "release_tag=$RELEASE_TAG"
+          echo "Automatic deployment requested for $RELEASE_TAG. Check the Identity deployment run for its result." >> "$GITHUB_STEP_SUMMARY"

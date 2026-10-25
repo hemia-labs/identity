@@ -24,6 +24,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
           path.join(__dirname, 'migrations', '*.js'),
         ],
         synchronize: false,
+        migrationsRun: false,
         logging: configService.get<boolean>('database.logging', false),
         retryAttempts: configService.get<number>('database.retryAttempts', 3),
         retryDelay: configService.get<number>('database.retryDelay', 3000),

@@ -11,11 +11,11 @@ import { RefreshTokensService } from '../refresh-tokens/refresh-tokens.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { UserEntity, UserStatus } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
-import { ChangePasswordDto } from './dtos/change-password.dto';
-import { ForgotPasswordDto } from './dtos/forgot-password.dto';
+import { ChangePasswordDto } from './dtos/password/change-password.dto';
+import { ForgotPasswordDto } from './dtos/password/forgot-password.dto';
 import { LoginDto } from './dtos/login.dto';
-import { ResetPasswordDto } from './dtos/reset-password.dto';
-import { OAuthStatePayload } from './types/oauth-state-payload.type';
+import { ResetPasswordDto } from './dtos/password/reset-password.dto';
+import { OAuthStatePayload } from './google/oauth-state-payload.type';
 
 type RequestMetadata = {
   ipAddress?: string | null;
@@ -49,9 +49,6 @@ export class AuthService {
 
     this.assertUserCanLogin(user);
 
-    // ponytail: tenant context is set via AccountsService.switchAccount, which
-    // validates membership. Login stays tenant-agnostic so it can't bind a
-    // session to a tenant the user isn't a member of.
     const refreshToken = this.createOpaqueToken();
     const refreshTokenHash = this.hashToken(refreshToken);
     const refreshExpiresAt = this.getDateFromDuration(
@@ -76,7 +73,7 @@ export class AuthService {
     return {
       accessToken: await this.signAccessToken(user, session.id),
       refreshToken,
-      session: this.toAuthSession(user, session.id, null, session.expiresAt),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -106,12 +103,7 @@ export class AuthService {
     return {
       accessToken: await this.signAccessToken(user, session.id),
       refreshToken,
-      session: this.toAuthSession(
-        user,
-        session.id,
-        null,
-        session.expiresAt,
-      ),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -199,24 +191,9 @@ export class AuthService {
     });
 
     return {
-      accessToken: await this.signAccessToken(
-        user,
-        session.id,
-        session.tenantId,
-        session.organizationId,
-        session.teamId,
-      ),
+      accessToken: await this.signAccessToken(user, session.id),
       refreshToken: nextRefreshToken,
-      session: this.toAuthSession(
-        user,
-        session.id,
-        session.tenantId,
-        session.expiresAt,
-        {
-          organizationId: session.organizationId,
-          teamId: session.teamId,
-        },
-      ),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -237,16 +214,7 @@ export class AuthService {
     }
 
     const user = await this.usersService.findOne(session.userId);
-    return this.toAuthSession(
-      user,
-      session.id,
-      session.tenantId,
-      session.expiresAt,
-      {
-        organizationId: session.organizationId,
-        teamId: session.teamId,
-      },
-    );
+    return this.toAuthSession(user, session.id, session.expiresAt);
   }
 
   async issueAccessTokenForSession(sessionId: string) {
@@ -258,23 +226,8 @@ export class AuthService {
     const user = await this.usersService.findOne(session.userId);
 
     return {
-      accessToken: await this.signAccessToken(
-        user,
-        session.id,
-        session.tenantId,
-        session.organizationId,
-        session.teamId,
-      ),
-      session: this.toAuthSession(
-        user,
-        session.id,
-        session.tenantId,
-        session.expiresAt,
-        {
-          organizationId: session.organizationId,
-          teamId: session.teamId,
-        },
-      ),
+      accessToken: await this.signAccessToken(user, session.id),
+      session: this.toAuthSession(user, session.id, session.expiresAt),
     };
   }
 
@@ -283,14 +236,18 @@ export class AuthService {
   }
 
   forgotPassword(_dto: ForgotPasswordDto) {
+    void _dto;
     return { accepted: true };
   }
 
   resetPassword(_dto: ResetPasswordDto) {
+    void _dto;
     throw new BadRequestException('Password reset is not configured yet');
   }
 
   changePassword(_userId: string, _dto: ChangePasswordDto) {
+    void _userId;
+    void _dto;
     throw new BadRequestException('Password change is not configured yet');
   }
 
@@ -304,13 +261,7 @@ export class AuthService {
     }
   }
 
-  private signAccessToken(
-    user: UserEntity,
-    sessionId: string,
-    tenantId?: string | null,
-    organizationId?: string | null,
-    teamId?: string | null,
-  ) {
+  private signAccessToken(user: UserEntity, sessionId: string) {
     const options: JwtSignOptions = {
       subject: user.id,
       secret: this.configService.getOrThrow<string>('jwt.accessSecret'),
@@ -325,24 +276,12 @@ export class AuthService {
         email: user.email,
         username: user.username,
         sessionId,
-        tenantId,
-        organizationId,
-        teamId,
       },
       options,
     );
   }
 
-  private toAuthSession(
-    user: UserEntity,
-    sessionId: string,
-    tenantId: string | null | undefined,
-    expiresAt: Date,
-    context?: {
-      organizationId?: string | null;
-      teamId?: string | null;
-    },
-  ) {
+  private toAuthSession(user: UserEntity, sessionId: string, expiresAt: Date) {
     return {
       user: {
         email: user.email,
@@ -352,9 +291,6 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         status: user.status,
       },
-      tenantId: tenantId ?? null,
-      organizationId: context?.organizationId ?? null,
-      teamId: context?.teamId ?? null,
       sessionId,
       expiresAt,
     };

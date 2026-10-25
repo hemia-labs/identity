@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: "UiCheckbox" })
 import type { CheckboxRootEmits, CheckboxRootProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { reactiveOmit } from "@vueuse/core"

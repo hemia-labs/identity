@@ -1,17 +1,28 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpCode, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { HealthService } from './health.service';
 
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
-  @Get()
-  getHealth() {
-    return this.healthService.getHealth();
+  @Get('live')
+  live() {
+    return { status: 'ok' };
   }
 
-  @Get('db')
-  getDatabaseHealth() {
-    return this.healthService.getDatabaseHealth();
+  @Get('startup')
+  startup() {
+    return { status: 'ok' };
+  }
+
+  @Get('ready')
+  @HttpCode(200)
+  async ready(@Res() response: Response) {
+    const result = await this.healthService.ready();
+    if (result.status !== 'ok') {
+      return response.status(503).json(result);
+    }
+    return response.status(200).json(result);
   }
 }

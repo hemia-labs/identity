@@ -1,0 +1,5 @@
+{
+  "bind_address": "192.168.100.102",
+  "http_port": 8080,
+  "public_url": "https://id.hemia.cloud"
+}

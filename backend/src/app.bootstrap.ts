@@ -7,7 +7,6 @@ import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { JsonLogger } from './common/logging/json.logger';
-import { requestContextMiddleware } from './common/middleware/request-context.middleware';
 
 export const configureApp = (
   app: INestApplication,

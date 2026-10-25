@@ -75,7 +75,7 @@ export class OAuthController {
       result = request.user?.sessionId
         ? await this.authService.logout(request.user.sessionId)
         : result;
-    } catch (e) {
+    } catch {
       result = { revoked: false };
     } finally {
       this.clearAuthCookies(response);
@@ -97,7 +97,9 @@ export class OAuthController {
     const baseOptions = this.getBaseCookieOptions();
     const configuredDomain = baseOptions.domain;
     const paths = ['/', '/api/v1', '/api/v1/auth', '/oauth'];
-    const domains = configuredDomain ? [configuredDomain, undefined] : [undefined];
+    const domains = configuredDomain
+      ? [configuredDomain, undefined]
+      : [undefined];
 
     for (const path of paths) {
       for (const domain of domains) {

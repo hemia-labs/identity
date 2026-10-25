@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: "UiBadge" })
 import type { HTMLAttributes } from "vue"
 import type { BadgeVariants } from "."
 import { cn } from "@/lib/utils"

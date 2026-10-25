@@ -16,7 +16,7 @@ export class UsersService {
     private readonly identityEventsService: IdentityEventsService,
   ) {}
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, actorClientId?: string) {
     const passwordHash = dto.password
       ? await argon2.hash(dto.password, { type: argon2.argon2id })
       : null;
@@ -32,39 +32,20 @@ export class UsersService {
     await this.identityEventsService.emit({
       type: IdentityEventType.UserCreated,
       userId: saved.id,
-      payload: { user: this.toBasicProfile(saved) },
+      payload: {
+        user: this.toBasicProfile(saved),
+        actor_client_id: actorClientId,
+      },
     });
     return saved;
   }
 
-  findAll(tenantId?: string) {
-    const query = this.usersRepository
-      .createQueryBuilder('user')
-      .orderBy('user.createdAt', 'DESC');
-
-    if (tenantId) {
-      query
-        .innerJoin('memberships', 'membership', 'membership.user_id = user.id')
-        .andWhere('membership.tenant_id = :tenantId', { tenantId })
-        .andWhere('membership.deleted_at IS NULL');
-    }
-
-    return query.getMany();
+  findAll() {
+    return this.usersRepository.find({ order: { createdAt: 'DESC' } });
   }
 
-  async findOne(id: string, tenantId?: string) {
-    const query = this.usersRepository
-      .createQueryBuilder('user')
-      .where('user.id = :id', { id });
-
-    if (tenantId) {
-      query
-        .innerJoin('memberships', 'membership', 'membership.user_id = user.id')
-        .andWhere('membership.tenant_id = :tenantId', { tenantId })
-        .andWhere('membership.deleted_at IS NULL');
-    }
-
-    const user = await query.getOne();
+  async findOne(id: string) {
+    const user = await this.usersRepository.findOne({ where: { id } });
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -116,8 +97,8 @@ export class UsersService {
     });
   }
 
-  async update(id: string, dto: UpdateUserDto, tenantId?: string) {
-    const user = await this.findOne(id, tenantId);
+  async update(id: string, dto: UpdateUserDto, actorClientId?: string) {
+    const user = await this.findOne(id);
 
     Object.assign(user, {
       ...dto,
@@ -129,13 +110,16 @@ export class UsersService {
     await this.identityEventsService.emit({
       type: IdentityEventType.UserUpdated,
       userId: saved.id,
-      payload: { user: this.toBasicProfile(saved) },
+      payload: {
+        user: this.toBasicProfile(saved),
+        actor_client_id: actorClientId,
+      },
     });
     return saved;
   }
 
-  async updateStatus(id: string, status: UserStatus, tenantId?: string) {
-    const user = await this.findOne(id, tenantId);
+  async updateStatus(id: string, status: UserStatus, actorClientId?: string) {
+    const user = await this.findOne(id);
     user.status = status;
     user.lockedAt = status === UserStatus.Locked ? new Date() : user.lockedAt;
 
@@ -146,20 +130,26 @@ export class UsersService {
           ? IdentityEventType.UserSuspended
           : IdentityEventType.UserUpdated,
       userId: saved.id,
-      payload: { user: this.toBasicProfile(saved) },
+      payload: {
+        user: this.toBasicProfile(saved),
+        actor_client_id: actorClientId,
+      },
     });
     return saved;
   }
 
-  async remove(id: string, tenantId?: string) {
-    const user = await this.findOne(id, tenantId);
+  async remove(id: string, actorClientId?: string) {
+    const user = await this.findOne(id);
     user.status = UserStatus.Deleted;
     await this.usersRepository.save(user);
     await this.usersRepository.softDelete(id);
     await this.identityEventsService.emit({
       type: IdentityEventType.UserDeleted,
       userId: user.id,
-      payload: { user: this.toBasicProfile(user) },
+      payload: {
+        user: this.toBasicProfile(user),
+        actor_client_id: actorClientId,
+      },
     });
   }
 

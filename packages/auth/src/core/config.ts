@@ -27,13 +27,19 @@ export interface SsoConfig {
   /** Scope OIDC base; la app añade los suyos (p. ej. `'docs.access'`). */
   scope: string;
 
+  /** Producto cuyo contexto debe resolver Access durante el login. */
+  productCode?: string;
+
   cookieName: string;
   sessionTtlSeconds: number;
   cookieSecure: boolean;
+  /** Exige un lock distribuido para refresh cuando la app escala horizontalmente. */
+  requireDistributedRefreshLock?: boolean;
 
   /**
    * Configuración servicio-a-servicio (client_credentials). Solo es obligatoria si la app
-   * usa {@link SsoClient}. Las credenciales recurren por defecto a `clientId`/`clientSecret`
+   * usa {@link SsoClient}. Para integraciones sin login usar MachineClient.
+   * Las credenciales recurren por defecto a `clientId`/`clientSecret`
    * del login.
    */
   service?: {
@@ -41,6 +47,12 @@ export interface SsoConfig {
     clientId?: string;
     clientSecret?: string;
     scopes: string;
+  };
+
+  access?: {
+    apiBaseUrl: string;
+    jwksUrl: string;
+    audience: string;
   };
 
   /**

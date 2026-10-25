@@ -1,0 +1,24 @@
+// Merge the relevant entries into the existing policy; do not replace it.
+// Grants are additive: an existing allow-all grant/ACL must also be reviewed.
+{
+  "tagOwners": {
+    "tag:hemia-ci": ["autogroup:admin"],
+    "tag:identity-apps": ["autogroup:admin"]
+  },
+  "grants": [
+    {
+      "src": ["tag:hemia-ci"],
+      "dst": ["192.168.100.102/32"],
+      "ip": ["tcp:22"]
+    }
+    // VPS alternative: replace the grant above with:
+    // {"src":["tag:hemia-ci"],"dst":["tag:identity-apps"],"ip":["tcp:22"]}
+  ],
+  "tests": [
+    {
+      "src": "tag:hemia-ci",
+      "accept": ["192.168.100.102:22"],
+      "deny": ["192.168.100.101:22", "192.168.100.101:8006", "192.168.100.103:5432", "192.168.100.102:8080"]
+    }
+  ]
+}

@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -12,7 +14,6 @@ import { IsNull, Repository } from 'typeorm';
 import { AuthenticatedUser } from '../../common/types/authenticated-request.type';
 import { ConsentsService } from '../consents/consents.service';
 import { JwksService } from '../jwks/jwks.service';
-import { RolesService } from '../roles/roles.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { UsersService } from '../users/users.service';
 import { OAuthAuthorizeQueryDto } from './dtos/oauth-authorize-query.dto';
@@ -28,11 +29,14 @@ import {
 import { OAuthTokenEntity } from './entities/oauth-token.entity';
 
 const ACCESS_TOKEN_SECONDS = 900;
-const REFRESH_TOKEN_SECONDS = 2_592_000;
-const HEMIA_DOCS_CLIENT_ID = 'hemia-docs';
+const CLIENT_ACCESS_TOKEN_SECONDS = 600;
+const TOKEN_EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
+const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 
 @Injectable()
 export class OAuthService {
+  private readonly logger = new Logger(OAuthService.name);
+
   constructor(
     @InjectRepository(OAuthClientEntity)
     private readonly clientsRepository: Repository<OAuthClientEntity>,
@@ -44,7 +48,6 @@ export class OAuthService {
     private readonly consentsService: ConsentsService,
     private readonly jwksService: JwksService,
     private readonly jwtService: JwtService,
-    private readonly rolesService: RolesService,
     private readonly sessionsService: SessionsService,
     private readonly usersService: UsersService,
   ) {}
@@ -97,12 +100,17 @@ export class OAuthService {
   }
 
   async token(dto: OAuthTokenDto) {
+    console.log(`token: `, dto.grant_type);
     if (dto.grant_type === 'authorization_code') {
       return this.exchangeAuthorizationCode(dto);
     }
 
     if (dto.grant_type === 'refresh_token') {
       return this.exchangeRefreshToken(dto);
+    }
+
+    if (dto.grant_type === TOKEN_EXCHANGE_GRANT) {
+      return this.tokenExchange(dto);
     }
 
     return this.clientCredentials(dto);
@@ -115,23 +123,61 @@ export class OAuthService {
     });
 
     if (token) {
-      token.revokedAt = new Date();
-      await this.tokensRepository.save(token);
+      const revokedAt = new Date();
+      const result = await this.tokensRepository.update(
+        { familyId: token.familyId, revokedAt: IsNull() },
+        { revokedAt },
+      );
+      this.logger.log(
+        JSON.stringify({
+          event: 'oauth.family_revoked',
+          clientId: token.clientId,
+          sessionId: token.sessionId ?? null,
+          familyId: token.familyId,
+          affected: result.affected ?? 0,
+          timestamp: revokedAt.toISOString(),
+        }),
+      );
     }
 
     return { revoked: true };
   }
 
   async introspect(dto: OAuthIntrospectDto) {
+    const caller = await this.findActiveClient(dto.client_id);
+    if (caller.type !== OAuthClientType.Confidential) {
+      throw new UnauthorizedException('Invalid introspection client');
+    }
+    await this.assertClientSecret(caller, dto.client_secret);
+    if (
+      !(caller.serviceDestinations
+        ? caller.serviceDestinations.some(
+            (destination) =>
+              destination.audience === 'identity-api' &&
+              destination.scopes.includes('identity.tokens.introspect'),
+          )
+        : caller.scopes.includes('identity.tokens.introspect'))
+    ) {
+      throw new ForbiddenException('Insufficient scope');
+    }
+
     const token = await this.findActiveAccessToken(dto.token);
 
     if (!token) {
       return { active: false };
     }
 
+    const tokenClient = await this.clientsRepository.findOne({
+      where: { clientId: token.clientId },
+    });
+    if (!tokenClient || tokenClient.status !== OAuthClientStatus.Active) {
+      return { active: false };
+    }
+
     if (!token.userId || !token.sessionId) {
       return {
         active: true,
+        aud: token.audience,
         client_id: token.clientId,
         scope: token.scope,
         exp: Math.floor(token.expiresAt.getTime() / 1000),
@@ -151,18 +197,14 @@ export class OAuthService {
 
     return {
       active: true,
+      aud: tokenClient.audience,
       client_id: token.clientId,
       scope: token.scope,
       exp: Math.floor(token.expiresAt.getTime() / 1000),
       sub: claims.sub,
       email: claims.email,
       name: claims.name,
-      tenant_id: claims.tenant_id,
-      organization_id: claims.organization_id,
-      team_id: claims.team_id,
       session_id: claims.session_id,
-      roles: claims.roles,
-      permissions: claims.permissions,
     };
   }
 
@@ -189,12 +231,7 @@ export class OAuthService {
       email_verified: true,
       name: claims.name,
       picture: claims.picture,
-      tenant_id: claims.tenant_id,
-      organization_id: claims.organization_id,
-      team_id: claims.team_id,
       session_id: claims.session_id,
-      roles: claims.roles,
-      permissions: claims.permissions,
     };
   }
 
@@ -231,8 +268,13 @@ export class OAuthService {
       code.codeChallenge,
       code.codeChallengeMethod,
     );
-    code.usedAt = new Date();
-    await this.codesRepository.save(code);
+    const consumed = await this.codesRepository.update(
+      { id: code.id, usedAt: IsNull() },
+      { usedAt: new Date() },
+    );
+    if (consumed.affected !== 1) {
+      throw new UnauthorizedException('Invalid authorization code');
+    }
 
     return this.issueUserTokens(
       client,
@@ -260,13 +302,25 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    if (previousToken.revokedAt) {
+    const revokedAt = new Date();
+    const consumed = await this.tokensRepository.update(
+      { id: previousToken.id, revokedAt: IsNull() },
+      { revokedAt },
+    );
+
+    if (consumed.affected !== 1) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'oauth.refresh_token_reuse',
+          clientId: client.clientId,
+          sessionId: previousToken.sessionId ?? null,
+          familyId: previousToken.familyId,
+          detectedAt: revokedAt.toISOString(),
+        }),
+      );
       await this.revokeFamily(previousToken.familyId);
       throw new UnauthorizedException('Refresh token reuse detected');
     }
-
-    previousToken.revokedAt = new Date();
-    await this.tokensRepository.save(previousToken);
 
     return this.issueUserTokens(
       client,
@@ -289,10 +343,95 @@ export class OAuthService {
     }
 
     await this.assertClientSecret(client, dto.client_secret);
-    const requestedScope = dto.scope ?? client.scopes.join(' ');
-    this.assertScopesAllowed(client, requestedScope);
+    if (!dto.scope?.trim()) throw new BadRequestException('scope is required');
+    const requestedScopes = [...new Set(this.parseScopes(dto.scope))];
+    let audience: string;
+    let allowedScopes: string[];
+    if (client.serviceDestinations) {
+      if (!dto.resource && !dto.audience)
+        throw new BadRequestException('resource is required');
+      const destination = client.serviceDestinations.find(
+        (entry) =>
+          (!dto.resource || entry.resource === dto.resource) &&
+          (!dto.audience || entry.audience === dto.audience),
+      );
+      if (!destination)
+        throw new BadRequestException('destination is not allowed');
+      audience = destination.audience;
+      allowedScopes = destination.scopes;
+    } else {
+      if (dto.resource || (dto.audience && dto.audience !== client.audience))
+        throw new BadRequestException('destination is not allowed');
+      audience = client.audience;
+      allowedScopes = client.scopes;
+    }
+    if (
+      !requestedScopes.length ||
+      !requestedScopes.every((scope) => allowedScopes.includes(scope))
+    )
+      throw new BadRequestException('scope is not allowed for destination');
+    return this.issueClientToken(client, requestedScopes.join(' '), audience);
+  }
 
-    return this.issueClientToken(client, requestedScope);
+  private async tokenExchange(dto: OAuthTokenDto) {
+    if (!dto.subject_token || dto.subject_token_type !== ACCESS_TOKEN_TYPE) {
+      throw new BadRequestException('subject access token is required');
+    }
+
+    const client = await this.findActiveClient(dto.client_id);
+    this.assertGrantAllowed(client, TOKEN_EXCHANGE_GRANT);
+    if (client.type !== OAuthClientType.Confidential) {
+      throw new UnauthorizedException(
+        'Token exchange requires a confidential client',
+      );
+    }
+    await this.assertClientSecret(client, dto.client_secret);
+
+    const accessAudience = this.configService.get<string>(
+      'ACCESS_AUDIENCE',
+      'access-api',
+    );
+    const audience = dto.audience ?? accessAudience;
+    if (audience !== accessAudience) {
+      this.logger.warn(
+        `Token exchange audience is not allowed: client_id=${client.clientId} requested_audience=${audience} expected_audience=${accessAudience}`,
+      );
+      throw new BadRequestException('audience is not allowed');
+    }
+
+    const subject = await this.findActiveAccessToken(dto.subject_token);
+    if (!subject?.userId || !subject.sessionId) {
+      throw new UnauthorizedException('Invalid subject token');
+    }
+
+    const scope = dto.scope ?? subject.scope;
+    this.assertScopesAllowed(client, scope);
+    const accessToken = await this.signAccessToken(
+      client,
+      subject.userId,
+      subject.sessionId,
+      scope,
+      audience,
+    );
+    await this.tokensRepository.save(
+      this.tokensRepository.create({
+        tokenHash: this.hashToken(accessToken),
+        clientId: client.clientId,
+        userId: subject.userId,
+        sessionId: subject.sessionId,
+        scope,
+        familyId: subject.familyId,
+        expiresAt: new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000),
+      }),
+    );
+
+    return {
+      access_token: accessToken,
+      issued_token_type: ACCESS_TOKEN_TYPE,
+      token_type: 'Bearer',
+      expires_in: ACCESS_TOKEN_SECONDS,
+      scope,
+    };
   }
 
   private async issueUserTokens(
@@ -307,7 +446,12 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid refresh token subject');
     }
 
-    const accessToken = await this.signAccessToken(client, userId, sessionId, scope);
+    const accessToken = await this.signAccessToken(
+      client,
+      userId,
+      sessionId,
+      scope,
+    );
     const refreshToken = this.createOpaqueToken();
     const expiresAt = new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000);
     await this.tokensRepository.save(
@@ -343,22 +487,48 @@ export class OAuthService {
     return response;
   }
 
-  private async issueClientToken(client: OAuthClientEntity, scope: string) {
-    const accessToken = this.createOpaqueToken();
+  private async issueClientToken(
+    client: OAuthClientEntity,
+    scope: string,
+    audience: string,
+  ) {
+    const key = await this.jwksService.getActiveKey();
+    const accessToken = await this.jwtService.signAsync(
+      {
+        grant_type: 'client_credentials',
+        client_id: client.clientId,
+        scope,
+      },
+      {
+        algorithm: 'RS256',
+        header: { alg: 'RS256', typ: 'at+jwt' },
+        audience,
+        expiresIn: `${CLIENT_ACCESS_TOKEN_SECONDS}s`,
+        issuer: this.configService.get<string>(
+          'app.issuer',
+          'https://id.hemia.cloud',
+        ),
+        jwtid: randomUUID(),
+        keyid: key.kid,
+        privateKey: key.privateKey,
+        subject: client.clientId,
+      },
+    );
     await this.tokensRepository.save(
       this.tokensRepository.create({
         tokenHash: this.hashToken(accessToken),
         clientId: client.clientId,
         scope,
         familyId: randomUUID(),
-        expiresAt: new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000),
+        audience,
+        expiresAt: new Date(Date.now() + CLIENT_ACCESS_TOKEN_SECONDS * 1000),
       }),
     );
 
     return {
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: ACCESS_TOKEN_SECONDS,
+      expires_in: CLIENT_ACCESS_TOKEN_SECONDS,
       scope,
     };
   }
@@ -409,12 +579,7 @@ export class OAuthService {
         email_verified: true,
         name: claims.name,
         picture: claims.picture,
-        tenant_id: claims.tenant_id,
-        organization_id: claims.organization_id,
-        team_id: claims.team_id,
         session_id: claims.session_id,
-        roles: claims.roles,
-        permissions: claims.permissions,
       },
       options,
     );
@@ -425,6 +590,7 @@ export class OAuthService {
     userId: string,
     sessionId: string,
     scope: string,
+    audience: string = client.audience,
   ) {
     const claims = await this.buildUserTokenClaims(
       client.clientId,
@@ -437,13 +603,6 @@ export class OAuthService {
       throw new UnauthorizedException('Session is inactive');
     }
 
-    if (
-      client.clientId === HEMIA_DOCS_CLIENT_ID &&
-      !this.hasPermission(claims.permissions, 'docs.access')
-    ) {
-      throw new UnauthorizedException('docs.access is required');
-    }
-
     const key = await this.jwksService.getActiveKey();
     const issuer = this.configService.get<string>(
       'app.issuer',
@@ -454,17 +613,12 @@ export class OAuthService {
         email: claims.email,
         name: claims.name,
         picture: claims.picture,
-        tenant_id: claims.tenant_id,
-        organization_id: claims.organization_id,
-        team_id: claims.team_id,
         session_id: claims.session_id,
-        roles: claims.roles,
-        permissions: claims.permissions,
         scope,
       },
       {
         algorithm: 'RS256',
-        audience: client.audience,
+        audience,
         expiresIn: `${ACCESS_TOKEN_SECONDS}s`,
         issuer,
         jwtid: randomUUID(),
@@ -476,7 +630,7 @@ export class OAuthService {
   }
 
   private async buildUserTokenClaims(
-    clientId: string,
+    _clientId: string,
     userId: string,
     sessionId: string | null | undefined,
     scope: string,
@@ -494,33 +648,13 @@ export class OAuthService {
       return null;
     }
 
-    const authenticatedUser: AuthenticatedUser = {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      sessionId,
-      tenantId: session.tenantId,
-      organizationId: session.organizationId,
-      teamId: session.teamId,
-    };
-    const [roles, permissions] = await Promise.all([
-      this.rolesService.getEffectiveRoleCodes(authenticatedUser),
-      this.rolesService.getEffectivePermissionCodes(authenticatedUser),
-    ]);
-
     return {
       sub: user.id,
       email: user.email,
       name: `${user.firstName} ${user.lastName}`.trim(),
       picture: user.avatarUrl,
-      tenant_id: session.tenantId,
-      organization_id: session.organizationId,
-      team_id: session.teamId,
       session_id: sessionId,
-      roles,
-      permissions,
       scope,
-      client_id: clientId,
     };
   }
 
@@ -624,16 +758,6 @@ export class OAuthService {
       .split(' ')
       .map((item) => item.trim())
       .filter(Boolean);
-  }
-
-  private hasPermission(permissions: string[], permission: string) {
-    const [resource] = permission.split('.');
-    return (
-      permissions.includes('*') ||
-      permissions.includes(permission) ||
-      permissions.includes(`${resource}.*`) ||
-      permissions.includes('*.*')
-    );
   }
 
   private createOpaqueToken() {

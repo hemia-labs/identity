@@ -19,6 +19,12 @@ export enum OAuthClientStatus {
   Deleted = 'deleted',
 }
 
+export type OAuthClientDestination = {
+  resource: string;
+  audience: string;
+  scopes: string[];
+};
+
 @Entity('oauth_clients')
 @Index('IDX_oauth_clients_client_id_active_unique', ['clientId'], {
   unique: true,
@@ -34,7 +40,15 @@ export class OAuthClientEntity {
   @Column({ length: 160 })
   audience: string;
 
-  @Column({ name: 'client_secret_hash', type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'service_destinations', type: 'jsonb', nullable: true })
+  serviceDestinations?: OAuthClientDestination[] | null;
+
+  @Column({
+    name: 'client_secret_hash',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   clientSecretHash?: string | null;
 
   @Column({ type: 'enum', enum: OAuthClientType })

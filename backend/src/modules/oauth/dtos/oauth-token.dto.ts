@@ -1,8 +1,20 @@
-import { IsIn, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 
 export class OAuthTokenDto {
   @IsString()
-  @IsIn(['authorization_code', 'refresh_token', 'client_credentials'])
+  @IsIn([
+    'authorization_code',
+    'refresh_token',
+    'client_credentials',
+    'urn:ietf:params:oauth:grant-type:token-exchange',
+  ])
   grant_type: string;
 
   @IsString()
@@ -37,4 +49,27 @@ export class OAuthTokenDto {
   @IsString()
   @MaxLength(500)
   scope?: string;
+
+  @IsOptional()
+  @IsString()
+  subject_token?: string;
+
+  @IsOptional()
+  @IsString()
+  subject_token_type?: string;
+
+  @IsOptional()
+  @IsUrl({
+    require_tld: false,
+    protocols: ['https', 'http'],
+    require_protocol: true,
+  })
+  @MaxLength(2048)
+  @Matches(/^[^#]+$/)
+  resource?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  audience?: string;
 }

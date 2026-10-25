@@ -2,7 +2,7 @@ import { generateKeyPairSync, createPublicKey } from 'crypto';
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import { JwksKeyEntity, JwksKeyStatus } from './entities/jwks-key.entity';
 
 type ActiveKey = {
@@ -55,14 +55,25 @@ export class JwksService {
     const key = await this.getActiveKey();
     const jwk = createPublicKey(key.publicKey).export({ format: 'jwk' });
 
+    const retired =
+      key.kid === 'dev-fallback-rs256'
+        ? []
+        : await this.jwksRepository.find({
+            where: {
+              status: JwksKeyStatus.Rotated,
+              rotatedAt: MoreThan(new Date(Date.now() - 900000)),
+            },
+            order: { createdAt: 'DESC' },
+          });
     return {
       keys: [
-        {
-          ...jwk,
-          kid: key.kid,
-          alg: key.alg,
+        { ...jwk, kid: key.kid, alg: key.alg, use: 'sig' },
+        ...retired.map((k) => ({
+          ...createPublicKey(k.privateKeyEncrypted).export({ format: 'jwk' }),
+          kid: k.kid,
+          alg: k.alg,
           use: 'sig',
-        },
+        })),
       ],
     };
   }

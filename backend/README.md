@@ -30,7 +30,7 @@ Variables principales:
 ```env
 PORT=3000
 APP_ISSUER=https://id.hemia.cloud
-APP_CORS_ORIGINS=https://id.hemia.cloud,https://console.hemia.cloud
+APP_CORS_ORIGINS=https://id.hemia.cloud,https://billing.hemia.cloud,https://console.hemia.cloud,https://docs.hemia.cloud,https://legal.hemia.cloud
 
 DB_HOST=localhost
 DB_PORT=5432
@@ -623,9 +623,9 @@ POST https://id.hemia.cloud/oauth/introspect
 Content-Type: application/json
 
 {
-  "client_id": "partner_dashboard",
-  "client_secret": "plain_client_secret_if_confidential",
-  "token": "token_to_check"
+  "client_id": "access",
+  "client_secret": "<secret>",
+  "token": "<token-a-validar>"
 }
 ```
 
@@ -954,10 +954,10 @@ bun --cwd backend start:prod
 
 ## Seeds
 
-El seed inicial crea permisos, roles de sistema y un usuario `SUPER_ADMIN` global.
+El seed inicial crea el usuario inicial, una clave JWKS si no hay una activa y los doce clientes OAuth actuales. Los roles y permisos pertenecen a Access.
 Tambien asegura una llave JWKS activa si no existe una en `jwks_keys`.
 
-`SUPER_ADMIN_PASSWORD` es obligatorio. No tiene default para evitar crear un admin con password conocida.
+`SUPER_ADMIN_PASSWORD` es obligatorio solo cuando el usuario inicial no existe. No tiene valor predeterminado.
 
 Variables disponibles:
 
@@ -969,7 +969,7 @@ SUPER_ADMIN_LAST_NAME=Admin
 SUPER_ADMIN_PASSWORD=change_me_strong_password
 
 JWKS_KEY_KID=local-dev-rs256
-JWKS_PRIVATE_KEY_PATH=./secrets/jwks-private.pem
+JWKS_PRIVATE_KEY="<clave RSA privada en PEM>"
 ```
 
 Ejecutar en local:
@@ -987,9 +987,13 @@ SUPER_ADMIN_FIRST_NAME='Hemia' \
 SUPER_ADMIN_LAST_NAME='Admin' \
 SUPER_ADMIN_PASSWORD='change_me_strong_password' \
 JWKS_KEY_KID='prod-rs256-2026-01' \
-JWKS_PRIVATE_KEY_PATH='./secrets/jwks-private.pem' \
+JWKS_PRIVATE_KEY='<clave RSA privada en PEM>' \
 bun --cwd backend seed:run
 ```
 
-El seed es idempotente: si el email ya existe y no esta borrado, actualiza username, nombre, password y status a `active`, y asegura el rol `SUPER_ADMIN`.
-Para JWKS, deriva `public_key` desde `JWKS_PRIVATE_KEY_PATH` o `JWKS_PRIVATE_KEY`. Si ya existe una llave activa con el mismo `kid` y private key, no crea otra. Si `JWKS_KEY_KID` cambia, rota la llave activa anterior e inserta la nueva como `active`.
+El seed solo inserta datos faltantes. Si el usuario o cliente ya existe sin borrado lógico, conserva toda su configuración, contraseña, secreto y estado; tampoco modifica timestamps. No asigna roles de Access.
+Para JWKS, conserva cualquier clave activa existente, aunque cambien las variables de entorno. Solo cuando no existe una activa crea una desde `JWKS_PRIVATE_KEY` o genera una RSA nueva; el seed no rota claves.
+
+## Ubicación de pruebas
+
+Las pruebas están en [`../test/backend/`](../test/README.md). `bun run test` ejecuta Jest, `bun run test:typecheck` verifica tipos y `bun run test:e2e` queda reservado para un entorno aislado configurado explícitamente.

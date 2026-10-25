@@ -7,6 +7,8 @@ async function bootstrap() {
   const logger = new JsonLogger();
   const app = await NestFactory.create(AppModule);
   const { port } = configureApp(app, logger);
-  await app.listen(port);
+  const host = process.env.APP_BIND_HOST;
+  if (host) await app.listen(port, host);
+  else await app.listen(port);
 }
-bootstrap();
+void bootstrap();

@@ -4,12 +4,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { ConsentsModule } from '../consents/consents.module';
 import { JwksModule } from '../jwks/jwks.module';
-import { RolesModule } from '../roles/roles.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { UsersModule } from '../users/users.module';
 import { OAuthAuthorizationCodeEntity } from './entities/oauth-authorization-code.entity';
 import { OAuthClientEntity } from './entities/oauth-client.entity';
 import { OAuthTokenEntity } from './entities/oauth-token.entity';
+import { ReauthenticationController } from '../auth/reauthentication/reauthentication.controller';
+import { ReauthenticationService } from '../auth/reauthentication/reauthentication.service';
 import { OAuthController } from './oauth.controller';
 import { OAuthService } from './oauth.service';
 
@@ -24,12 +25,11 @@ import { OAuthService } from './oauth.service';
     AuthModule,
     ConsentsModule,
     JwksModule,
-    RolesModule,
     SessionsModule,
     UsersModule,
   ],
-  controllers: [OAuthController],
-  providers: [OAuthService],
+  controllers: [OAuthController, ReauthenticationController],
+  providers: [OAuthService, ReauthenticationService],
   exports: [OAuthService],
 })
 export class OAuthModule {}

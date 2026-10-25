@@ -1,0 +1,16 @@
+/**
+ * Almacén clave/valor intercambiable para sesiones, estado PKCE y contexto de usuario. El núcleo depende de esta interfaz, no de Redis; el cliente aporta cualquier
+ * implementación (un servicio de Redis suele encajar ya con esta forma).
+ */
+export interface SessionStore {
+  get<T>(key: string): Promise<T | null>;
+  /** Guarda `value` bajo `key`, expirando tras `ttlSeconds`. */
+  set<T>(key: string, value: T, ttlSeconds: number): Promise<void>;
+  delete(key: string): Promise<void>;
+  /** Ejecuta una operación con exclusión mutua distribuida cuando el store la soporta. */
+  withLock?<T>(
+    key: string,
+    ttlSeconds: number,
+    callback: () => Promise<T>,
+  ): Promise<T>;
+}

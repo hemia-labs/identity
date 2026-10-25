@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,12 +12,11 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "run-s lint:*",
-    "lint:oxlint": "oxlint . --fix",
-    "lint:eslint": "eslint . --fix --cache",
-    "format": "prettier --write --experimental-cli src/"
+    "lint:oxlint": "cd .. && frontend/node_modules/.bin/oxlint frontend test/frontend --config frontend/.oxlintrc.json --fix",
+    "lint:eslint": "cd .. && frontend/node_modules/.bin/eslint --config frontend/eslint.config.ts frontend test/frontend --fix --cache",
+    "format": "prettier --config .prettierrc.json --write --experimental-cli src/ ../test/frontend/"
   },
   "dependencies": {
-    "@lucide/vue": "^1.17.0",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/vue-query": "^5.101.0",
     "@vee-validate/zod": "^4.15.1",

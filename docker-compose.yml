@@ -1,27 +1,71 @@
+name: hemia-identity
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   backend:
+    image: hemia-identity-backend:${IDENTITY_IMAGE_TAG:-local}
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: runtime
-    container_name: hemia-id-backend
     restart: unless-stopped
+    init: true
     env_file:
-      - ./backend/.env
-    ports:
-      - "4000:4000"
-    # Postgres and Redis run on the host, outside Docker. host.docker.internal resolves to the host.
+      - path: ${IDENTITY_ENV_FILE:-./backend/.env.production}
+        format: raw
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      APP_BIND_HOST: 0.0.0.0
+      NODE_OPTIONS: --max-old-space-size=256
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - host.docker.internal:host-gateway
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4000/api/v1/health/ready', {signal: AbortSignal.timeout(4000)}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
   frontend:
+    image: hemia-identity-frontend:${IDENTITY_IMAGE_TAG:-local}
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
       target: runtime
       args:
         VITE_API_BASE_URL: /api/v1
-    container_name: hemia-id-frontend
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "${IDENTITY_BIND_ADDRESS:-127.0.0.1}:${IDENTITY_HTTP_PORT:-8080}:8080"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    mem_limit: 64m
+    cpus: 0.25
+    pids_limit: 32
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/healthz]
+      interval: 30s
+      timeout: 5s
+      retries: 3

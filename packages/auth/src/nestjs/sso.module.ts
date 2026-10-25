@@ -1,5 +1,11 @@
 import { Module, type DynamicModule, type Provider } from '@nestjs/common';
-import { SsoCore, SsoClient, validateConfig, type SsoConfig } from '../core/index';
+import {
+  AccessClient,
+  SsoCore,
+  SsoClient,
+  validateConfig,
+  type SsoConfig,
+} from '../core/index';
 import type { SessionStore } from '../core/index';
 import { SSO_CONFIG, SESSION_STORE } from './tokens';
 import { SsoController } from './sso.controller';
@@ -50,9 +56,14 @@ export class SsoModule {
           inject: [SSO_CONFIG, SESSION_STORE],
           useFactory: (cfg: SsoConfig, store: SessionStore) => new SsoClient(cfg, store),
         },
+        {
+          provide: AccessClient,
+          inject: [SSO_CONFIG],
+          useFactory: (cfg: SsoConfig) => new AccessClient(cfg),
+        },
         SsoAuthGuard,
       ],
-      exports: [SsoCore, SsoClient, SsoAuthGuard, SSO_CONFIG],
+      exports: [SsoCore, SsoClient, AccessClient, SsoAuthGuard, SSO_CONFIG],
     };
   }
 }

@@ -8,14 +8,10 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { TenantEntity } from '../../tenants/entities/tenant.entity';
-import { OrganizationEntity } from '../../organizations/entities/organization.entity';
-import { TeamEntity } from '../../teams/entities/team.entity';
 import { UserEntity } from '../../users/entities/user.entity';
 
 @Entity('sessions')
 @Index('IDX_sessions_user_id', ['userId'])
-@Index('IDX_sessions_tenant_id', ['tenantId'])
 @Index('IDX_sessions_family_id', ['sessionFamilyId'])
 @Index('IDX_sessions_expires_at', ['expiresAt'])
 @Index('IDX_sessions_is_active', ['isActive'])
@@ -29,27 +25,6 @@ export class SessionEntity {
   @ManyToOne(() => UserEntity, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'user_id' })
   user: UserEntity;
-
-  @Column({ name: 'tenant_id', type: 'uuid', nullable: true })
-  tenantId?: string | null;
-
-  @ManyToOne(() => TenantEntity, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'tenant_id' })
-  tenant?: TenantEntity | null;
-
-  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
-  organizationId?: string | null;
-
-  @ManyToOne(() => OrganizationEntity, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'organization_id' })
-  organization?: OrganizationEntity | null;
-
-  @Column({ name: 'team_id', type: 'uuid', nullable: true })
-  teamId?: string | null;
-
-  @ManyToOne(() => TeamEntity, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'team_id' })
-  team?: TeamEntity | null;
 
   @Column({ name: 'session_family_id', type: 'uuid' })
   sessionFamilyId: string;
