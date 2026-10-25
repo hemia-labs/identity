@@ -8,14 +8,17 @@ import re
 import subprocess
 
 TAG = re.compile(r'identity-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
-IMAGE = re.compile(r'ghcr\.io/hemia-labs/identity-(backend|frontend)@sha256:[a-f0-9]{64}\Z')
+DEFAULT_REGISTRY = 'registry.tail41610c.ts.net'
 
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def validate(directory, expected_tag=None):
+def validate(directory, expected_tag=None, registry_host=None):
+    registry_host = registry_host or os.environ.get('REGISTRY_HOST') or DEFAULT_REGISTRY
+    if not re.fullmatch(r'[a-z0-9]+(?:[.-][a-z0-9]+)*', registry_host):
+        raise ValueError('Invalid registry hostname')
     directory = Path(directory)
     manifest = json.loads((directory / 'release.json').read_text())
     if manifest.get('schema') != 1 or not TAG.fullmatch(manifest.get('tag', '')):
@@ -29,10 +32,12 @@ def validate(directory, expected_tag=None):
         for name, value in manifest['migrations'].items()
     ):
         raise ValueError('Invalid migration manifest')
+    if manifest.get('registry') != registry_host:
+        raise ValueError('Release uses an unexpected registry')
     for service in ['backend', 'frontend']:
-        match = IMAGE.fullmatch(manifest['images'][service])
+        match = re.fullmatch(re.escape(registry_host) + r'/identity/(backend|frontend)@sha256:[a-f0-9]{64}', manifest['images'][service])
         if not match or match.group(1) != service:
-            raise ValueError('Expected the correct GHCR image pinned by digest')
+            raise ValueError('Expected the correct private registry image pinned by digest')
     for name in ['compose.json', 'identity-deploy.py']:
         if digest(directory / name) != manifest['files'][name]:
             raise ValueError('Release asset checksum mismatch: ' + name)
@@ -54,11 +59,14 @@ def create(tag, output):
     config = json.loads(subprocess.check_output([
         'docker', 'compose', '--env-file', '/dev/null', 'config', '--format', 'json'
     ], cwd=root, env={**os.environ, 'IDENTITY_ENV_FILE': '/dev/null'}, text=True))
+    registry_host = os.environ.get('REGISTRY_HOST') or DEFAULT_REGISTRY
+    if not re.fullmatch(r'[a-z0-9]+(?:[.-][a-z0-9]+)*', registry_host):
+        raise ValueError('Invalid registry hostname')
     images = {}
     for service in ['backend', 'frontend']:
-        image = f'ghcr.io/hemia-labs/identity-{service}:{tag}'
+        image = f'{registry_host}/identity/{service}:{tag}'
         info = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image], text=True))[0]
-        prefix = f'ghcr.io/hemia-labs/identity-{service}@'
+        prefix = f'{registry_host}/identity/{service}@'
         images[service] = next(value for value in info['RepoDigests'] if value.startswith(prefix))
         config['services'][service].pop('build', None)
         config['services'][service]['image'] = images[service]
@@ -67,7 +75,7 @@ def create(tag, output):
     (output / 'compose.json').write_text(json.dumps(config, indent=2) + '\n')
     (output / 'identity-deploy.py').write_bytes((root / 'scripts/identity-deploy.py').read_bytes())
     manifest = {
-        'schema': 1, 'tag': tag,
+        'schema': 1, 'tag': tag, 'registry': registry_host,
         'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
         'images': images,
         'migrations': {p.name: digest(p) for p in sorted((root / 'backend/src/database/migrations').glob('*.ts'))},

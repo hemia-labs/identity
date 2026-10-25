@@ -33,18 +33,18 @@ class DeploymentTest(unittest.TestCase):
         env.chmod(0o600)
         (shared / 'host.json').write_text(json.dumps({
             'bind_address': '127.0.0.1', 'http_port': 8080,
-            'public_url': 'https://id.example.test'}))
+            'public_url': 'https://id.example.test', 'registry_host': 'registry.tail41610c.ts.net'}))
         self.commands = []
 
     def bundle(self, tag, migrations=None):
         directory = self.root / ('bundle-' + tag)
         directory.mkdir()
-        images = {name: f'ghcr.io/hemia-labs/identity-{name}@sha256:' + 'a' * 64
+        images = {name: f'registry.tail41610c.ts.net/identity/{name}@sha256:' + 'a' * 64
                   for name in ['backend', 'frontend']}
         compose = {'services': {name: {'image': value} for name, value in images.items()}}
         (directory / 'compose.json').write_text(json.dumps(compose))
         (directory / 'identity-deploy.py').write_bytes((ROOT / 'scripts/identity-deploy.py').read_bytes())
-        manifest = {'schema': 1, 'tag': tag, 'commit': 'b' * 40, 'images': images,
+        manifest = {'schema': 1, 'tag': tag, 'registry': 'registry.tail41610c.ts.net', 'commit': 'b' * 40, 'images': images,
                     'migrations': migrations or {},
                     'files': {name: release.digest(directory / name)
                               for name in ['compose.json', 'identity-deploy.py']}}
@@ -151,6 +151,59 @@ class DeploymentTest(unittest.TestCase):
                 deploy.perform(self.root, candidate, 'deploy')
         self.assertFalse(any('up' in c for c in self.commands))
         self.assertEqual((self.root / 'current').resolve().name, 'identity-v1.0.0')
+
+    def test_release_creation_pins_private_registry_digests(self):
+        output = self.root / 'created'
+        config = {'services': {name: {'image': 'local', 'build': {'context': '.'}}
+                               for name in ['backend', 'frontend']}}
+        def command(args, **kwargs):
+            if args[:2] == ['git', 'rev-parse']:
+                return 'b' * 40
+            if args[:2] == ['docker', 'compose']:
+                return json.dumps(config)
+            if args[:3] == ['docker', 'image', 'inspect']:
+                image = args[3].split(':identity-v', 1)[0]
+                return json.dumps([{'RepoDigests': [image + '@sha256:' + 'a' * 64]}])
+            raise AssertionError(args)
+        with patch.object(release.subprocess, 'check_output', side_effect=command), \
+             patch.dict(os.environ, {'REGISTRY_HOST': 'registry.tail41610c.ts.net'}):
+            release.create('identity-v1.0.0', output)
+        manifest = release.validate(output)
+        self.assertEqual(manifest['registry'], 'registry.tail41610c.ts.net')
+        self.assertEqual(manifest['images']['backend'],
+            'registry.tail41610c.ts.net/identity/backend@sha256:' + 'a' * 64)
+        deploy.read_manifest(output)
+
+    def test_untrusted_registry_is_rejected_before_docker(self):
+        bundle = self.bundle('identity-v1.0.0')
+        manifest = json.loads((bundle / 'release.json').read_text())
+        manifest['registry'] = 'attacker.example.test'
+        (bundle / 'release.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'unexpected registry'):
+            release.validate(bundle)
+        with self.assertRaisesRegex(ValueError, 'unexpected registry'):
+            self.perform(bundle)
+        self.assertEqual(self.commands, [])
+
+    def test_registry_host_can_follow_a_vps_migration(self):
+        bundle = self.bundle('identity-v1.0.0')
+        manifest = json.loads((bundle / 'release.json').read_text())
+        compose = json.loads((bundle / 'compose.json').read_text())
+        host = 'registry.example.test'
+        manifest['registry'] = host
+        for service in ['backend', 'frontend']:
+            image = host + '/identity/' + service + '@sha256:' + 'a' * 64
+            manifest['images'][service] = image
+            compose['services'][service]['image'] = image
+        (bundle / 'compose.json').write_text(json.dumps(compose))
+        manifest['files']['compose.json'] = release.digest(bundle / 'compose.json')
+        (bundle / 'release.json').write_text(json.dumps(manifest))
+        settings = self.root / 'shared/host.json'
+        data = json.loads(settings.read_text()); data['registry_host'] = host
+        settings.write_text(json.dumps(data))
+        release.validate(bundle, registry_host=host)
+        self.perform(bundle)
+        self.assertTrue((self.root / 'current').exists())
 
     def test_release_validation_rejects_mutable_image(self):
         bundle = self.bundle('identity-v1.0.0')
