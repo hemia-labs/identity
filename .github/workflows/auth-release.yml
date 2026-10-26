@@ -1,20 +1,20 @@
-name: Auth releases
+name: auth-release.yml
 
 on:
   push:
-    branches: [develop]
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: auth-release-develop
+  group: auth-release-main
   cancel-in-progress: false
   queue: max
 
 jobs:
   classify:
-    if: github.repository == 'hemia-labs/identity' && github.ref == 'refs/heads/develop'
+    if: github.repository == 'hemia-labs/identity' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -31,7 +31,7 @@ jobs:
         run: node scripts/auth-release.mjs classify "$BASE_SHA"
 
   version-pr:
-    needs: classify
+    needs: [classify, validate]
     if: needs.classify.outputs.release != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -67,49 +67,32 @@ jobs:
           repositories: identity
           permission-contents: write
           permission-pull-requests: write
-      - name: Create or update the version PR
+      - name: Prepare the Auth version and changelog
         if: steps.changesets.outputs.pending == 'true'
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1 for Changesets CLI 2
+        run: |
+          bun run version:auth
+          node scripts/auth-release.mjs notes > "$RUNNER_TEMP/auth-release-notes.md"
+      - name: Create or update the Auth version PR
+        if: steps.changesets.outputs.pending == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
-          github-token: ${{ steps.app-token.outputs.token || github.token }}
-          version: bun run version:auth
+          token: ${{ steps.app-token.outputs.token || github.token }}
+          base: main
+          branch: changeset-release/auth
           title: 'chore(auth): release package versions'
-          commit: 'chore(auth): release package versions'
-          commitMode: github-api
-          createGithubReleases: false
+          commit-message: 'chore(auth): release package versions'
+          body-path: ${{ runner.temp }}/auth-release-notes.md
+          add-paths: |
+            packages/auth/package.json
+            packages/auth/CHANGELOG.md
+            bun.lock
+            .changeset/*.md
 
   validate:
     needs: classify
-    if: needs.classify.outputs.release == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '24'
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: '1.3.14'
-      - run: bun install --frozen-lockfile
-      - run: node --test test/release/auth-release.test.mjs
-      - run: bun run --cwd packages/auth typecheck
-      - run: bun run --cwd packages/auth test
-      - run: bun run --cwd packages/auth build
-      - run: node test/auth/package/built-nestjs.cjs
-      - name: Validate and preserve the npm tarball
-        env:
-          AUTH_RELEASE_DIR: ${{ runner.temp }}/auth-release
-        run: node test/auth/package/check-auth-tarball.mjs
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: auth-release
-          path: ${{ runner.temp }}/auth-release/
-          if-no-files-found: error
-          retention-days: 7
+    uses: ./.github/workflows/package-auth.yml
+    with:
+      preserve-release-artifact: ${{ needs.classify.outputs.release == 'true' }}
 
   publish:
     needs: [classify, validate]
@@ -118,7 +101,7 @@ jobs:
     timeout-minutes: 10
     environment: npm
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -134,7 +117,8 @@ jobs:
         with:
           name: auth-release
           path: ${{ runner.temp }}/auth-release
-      - name: Publish only an unpublished, validated version
+      - name: Publish verified npm package and create GitHub Release
         env:
           ENABLE_NPM_PUBLISH: ${{ vars.ENABLE_NPM_PUBLISH }}
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/auth-release.mjs publish "$RUNNER_TEMP/auth-release"

@@ -6,38 +6,21 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import type { SaveOAuthScopeDto } from './oauth-scope.dto';
-export type OAuthScope = SaveOAuthScopeDto & { id: string };
+export type OAuthScope = SaveOAuthScopeDto & {
+  id: string;
+  kind: 'protocol' | 'api';
+};
 @Injectable()
 export class OAuthScopesService {
   constructor(private readonly db: DataSource) {}
   list(): Promise<OAuthScope[]> {
     return this.db.query(
-      'SELECT id,code,audience,name,description,resource,enabled FROM oauth_scopes ORDER BY audience,name,code',
+      'SELECT id,code,name,description,enabled,kind FROM oauth_scopes ORDER BY name,code',
     );
   }
   async save(dto: SaveOAuthScopeDto, id?: string): Promise<OAuthScope> {
     if (!dto.name.trim())
       throw new BadRequestException('Escribe el nombre del permiso.');
-    let resource: string | null = null;
-    if (dto.resource) {
-      let url: URL;
-      try {
-        url = new URL(dto.resource);
-      } catch {
-        throw new BadRequestException('URL de API inválida.');
-      }
-      if (
-        !['https:', 'http:'].includes(url.protocol) ||
-        url.username ||
-        url.password ||
-        url.search ||
-        url.hash
-      )
-        throw new BadRequestException(
-          'La URL debe usar HTTP o HTTPS, sin credenciales, parámetros ni fragmentos.',
-        );
-      resource = url.origin + url.pathname.replace(/\/$/, '');
-    }
     try {
       if (id) {
         const [old]: OAuthScope[] = await this.db.query(
@@ -45,21 +28,19 @@ export class OAuthScopesService {
           [id],
         );
         if (!old) throw new NotFoundException('Permiso no encontrado.');
-        if (old.code !== dto.code || old.audience !== dto.audience)
+        if (old.code !== dto.code)
           throw new ConflictException(
-            'El código y la audiencia de un permiso registrado son fijos.',
+            'El código de un permiso registrado es fijo.',
           );
       }
       const [saved]: OAuthScope[] = await this.db.query(
         id
-          ? 'UPDATE oauth_scopes SET name=$3,description=$4,resource=$5,enabled=$6,updated_at=now() WHERE id=$7 AND code=$1 AND audience=$2 RETURNING id,code,audience,name,description,resource,enabled'
-          : 'INSERT INTO oauth_scopes(code,audience,name,description,resource,enabled) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,code,audience,name,description,resource,enabled',
+          ? 'UPDATE oauth_scopes SET name=$2,description=$3,enabled=$4,updated_at=now() WHERE code=$1 AND id=$5 RETURNING id,code,name,description,enabled,kind'
+          : "INSERT INTO oauth_scopes(code,name,description,enabled,kind) VALUES($1,$2,$3,$4,'api') RETURNING id,code,name,description,enabled,kind",
         [
           dto.code,
-          dto.audience,
           dto.name.trim(),
           dto.description.trim(),
-          resource,
           dto.enabled,
           ...(id ? [id] : []),
         ],
@@ -68,9 +49,7 @@ export class OAuthScopesService {
       return saved;
     } catch (cause) {
       if ((cause as { code?: string }).code === '23505')
-        throw new ConflictException(
-          'Este permiso ya está registrado para esa audiencia.',
-        );
+        throw new ConflictException('Este código de scope ya está registrado.');
       throw cause;
     }
   }

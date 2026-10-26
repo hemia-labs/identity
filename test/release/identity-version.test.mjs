@@ -66,10 +66,8 @@ for (const target of ['identity', 'auth']) {
       }
       symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
       const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
-      git('init', '-q', '-b', 'fixture'); git('add', '.');
+      git('init', '-q', '-b', 'main'); git('add', '.');
       git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture');
-      git('update-ref', 'refs/remotes/origin/develop', 'HEAD');
-      if (target === 'auth') git('branch', 'develop');
       writeFileSync(join(dir, '.changeset/app.md'), note);
       writeFileSync(join(dir, '.changeset/sdk.md'), '---\n"@hemia/auth": patch\n---\nSDK fix.\n');
       git('add', '.changeset');
@@ -77,9 +75,6 @@ for (const target of ['identity', 'auth']) {
       if (target === 'identity') {
         git('update-ref', 'refs/remotes/origin/main', 'HEAD');
         const workflow = readFileSync(join(root, '.github/workflows/identity-release.yml'), 'utf8');
-        const base = workflow.match(/^          (git branch develop origin\/develop)$/m)?.[1];
-        assert(base, 'Main checkout must prepare the configured Changesets base branch');
-        git(...base.split(' ').slice(1));
         const command = workflow.match(/^          (node scripts\/identity-version.mjs pending)$/m)?.[1];
         assert(command, 'Pending notes must be read independently of the Git base');
         const output = join(dir, 'pending-output');
@@ -116,6 +111,38 @@ for (const target of ['identity', 'auth']) {
         assert(readFileSync(join(dir, 'backend/CHANGELOG.md'), 'utf8').includes(`## ${appVersion}`));
         assert(readFileSync(join(dir, 'frontend/CHANGELOG.md'), 'utf8').includes(`## ${appVersion}`));
       }
+      const base = git('rev-parse', 'HEAD').toString().trim();
+      git('add', 'backend', 'frontend', 'packages/auth', '.changeset', 'bun.lock');
+      git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'reviewed version batch');
+      for (const classifier of ['identity', 'auth']) {
+        const output = join(dir, `${classifier}-classification`);
+        const script = classifier === 'identity' ? 'identity-version.mjs' : 'auth-release.mjs';
+        execFileSync(process.execPath, [join(dir, 'scripts', script), 'classify', base], {
+          cwd: dir, env: { ...process.env, GITHUB_OUTPUT: output }, stdio: 'pipe',
+        });
+        assert(readFileSync(output, 'utf8').includes(`release=${classifier === target}\n`));
+      }
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 }
+
+
+test('release notes come from both changelogs without a docs directory', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'identity-release-notes-'));
+  try {
+    for (const name of ['scripts', 'backend', 'frontend']) mkdirSync(join(dir, name));
+    for (const name of ['identity-version.mjs', 'auth-release.mjs']) {
+      copyFileSync(join(root, 'scripts', name), join(dir, 'scripts', name));
+    }
+    writeFileSync(join(dir, 'backend/package.json'), JSON.stringify({ version: '1.2.3' }));
+    for (const name of ['backend', 'frontend']) {
+      writeFileSync(join(dir, name, 'CHANGELOG.md'), `# Changelog\n\n## 1.2.3\n\n${name} patch.\n\n## 1.2.2\n\nOld change.\n`);
+    }
+    const output = execFileSync(process.execPath, [join(dir, 'scripts/identity-version.mjs'), 'notes'], { encoding: 'utf8' });
+    assert(output.includes('## backend\n\nbackend patch.'));
+    assert(output.includes('## frontend\n\nfrontend patch.'));
+    assert(!output.includes('Old change.'));
+    writeFileSync(join(dir, 'frontend/CHANGELOG.md'), '# Changelog\n\n## 1.2.2\n\nOld change.\n');
+    assert.throws(() => execFileSync(process.execPath, [join(dir, 'scripts/identity-version.mjs'), 'notes'], { stdio: 'pipe' }), /Command failed/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

@@ -44,6 +44,7 @@ const createService = (clientOverride: Partial<OAuthClientEntity> = {}) => {
   const codes: OAuthAuthorizationCodeEntity[] = [];
   const tokens: OAuthTokenEntity[] = [];
   const clientsRepository = {
+    manager: { query: jest.fn().mockResolvedValue([]) },
     findOne: jest.fn().mockResolvedValue(activeClient),
   } as unknown as Repository<OAuthClientEntity>;
   const codesRepository = {
@@ -804,5 +805,148 @@ describe('OAuthService', () => {
 
     await service.revoke({ token: subject });
     expect(tokens.every((token) => token.revokedAt instanceof Date)).toBe(true);
+  });
+});
+
+describe('API audience binding for user tokens', () => {
+  const destination = {
+    resource: 'https://billing.example',
+    audience: 'billing-api',
+    scopes: ['billing.read'],
+  };
+  const query = {
+    client_id: 'web_app',
+    redirect_uri: 'https://app.hemia.cloud/callback',
+    response_type: 'code',
+    scope: 'openid billing.read',
+    code_challenge: 'verifier',
+    code_challenge_method: 'plain',
+    resource: destination.resource,
+  };
+  const user = {
+    id: 'user-id',
+    email: 'user@hemia.cloud',
+    sessionId: 'session-id',
+  };
+  it('binds authorization code and refreshed access tokens to the chosen API while the ID token targets the client', async () => {
+    const { service, jwtService, tokens } = createService({
+      serviceDestinations: [destination],
+    });
+    const redirect = await service.authorize(query, user);
+    const response = await service.token({
+      grant_type: 'authorization_code',
+      client_id: 'web_app',
+      redirect_uri: query.redirect_uri,
+      code: new URL(redirect).searchParams.get('code')!,
+      code_verifier: 'verifier',
+      resource: destination.resource,
+    });
+    expect(tokens[0].audience).toBe('billing-api');
+    expect(jwtService.signAsync).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ audience: 'billing-api' }),
+    );
+    expect(jwtService.signAsync).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ audience: 'web_app' }),
+    );
+    if (!('refresh_token' in response)) throw new Error('Authorization-code response must include a refresh token');
+    await service.token({
+      grant_type: 'refresh_token',
+      client_id: 'web_app',
+      refresh_token: response.refresh_token as string,
+      resource: destination.resource,
+    });
+    expect(tokens[1].audience).toBe('billing-api');
+  });
+  it('rejects scopes authorized only for another API', async () => {
+    const { service } = createService({
+      serviceDestinations: [
+        destination,
+        {
+          resource: 'https://other.example',
+          audience: 'other-api',
+          scopes: ['other.read'],
+        },
+      ],
+    });
+    await expect(
+      service.authorize({ ...query, scope: 'openid other.read' }, user),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+  it('rejects changing the target audience at code exchange', async () => {
+    const { service, tokens } = createService({
+      serviceDestinations: [destination],
+    });
+    const redirect = await service.authorize(query, user);
+    await expect(
+      service.token({
+        grant_type: 'authorization_code',
+        client_id: 'web_app',
+        redirect_uri: query.redirect_uri,
+        code: new URL(redirect).searchParams.get('code')!,
+        code_verifier: 'verifier',
+        audience: 'other-api',
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(tokens).toHaveLength(0);
+  });
+});
+
+describe('Console exchange into Access', () => {
+  async function fixture() {
+    const f = createService({
+      clientId: 'console',
+      audience: 'console-api',
+      type: OAuthClientType.Confidential,
+      grantTypes: [TOKEN_EXCHANGE_GRANT],
+      scopes: ['openid', 'console.access'],
+      clientSecretHash:
+        '$argon2id$v=19$m=65536,t=3,p=4$CIb7mGT3XddmMZD3As8Pyw$F5DWgaQtUu9jIF+60LmR4v6rfqKYrOyVSR7X+0meOrk',
+    });
+    await f.service['tokensRepository'].save(
+      f.service['tokensRepository'].create({
+        tokenHash: f.service['hashToken']('subject'),
+        clientId: 'console',
+        userId: 'user-id',
+        sessionId: 'session-id',
+        audience: 'console-api',
+        scope: 'openid console.access',
+        familyId: 'family-id',
+        expiresAt: new Date(Date.now() + 60000),
+      }),
+    );
+    return {
+      ...f,
+      request: {
+        grant_type: TOKEN_EXCHANGE_GRANT,
+        client_id: 'console',
+        client_secret: 'secret',
+        subject_token: 'subject',
+        subject_token_type: ACCESS_TOKEN_TYPE,
+        audience: 'access-api',
+        scope: 'openid console.access',
+      },
+    };
+  }
+  it('exchanges the assigned identity scopes even though the login audience differs', async () => {
+    const f = await fixture();
+    await expect(f.service.token(f.request)).resolves.toMatchObject({
+      token_type: 'Bearer',
+    });
+    expect(f.tokens[1].audience).toBe('access-api');
+    expect(f.jwtService.signAsync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ scope: 'openid console.access' }),
+      expect.objectContaining({ audience: 'access-api' }),
+    );
+  });
+  it('still rejects scopes not assigned to the client and audiences other than Access', async () => {
+    for (const change of [{ scope: 'admin' }, { audience: 'billing-api' }]) {
+      const f = await fixture();
+      await expect(
+        f.service.token({ ...f.request, ...change }),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(f.tokens).toHaveLength(1);
+    }
   });
 });

@@ -10,7 +10,7 @@
   ],
   "linked": [],
   "access": "public",
-  "baseBranch": "develop",
+  "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "privatePackages": {
     "version": true,

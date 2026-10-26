@@ -137,12 +137,9 @@ Antes de integrarse, el cliente debe estar dado de alta en Hemia ID. Datos que n
 
 ## Documentacion
 
-- [Docker: Proxmox y VPS](./docs/docker-deployment.md)
-- [Ejemplos de variables de entorno](./docs/environment-variables.md)
-- [CI/CD Identity: configuracion, releases y rollback](./docs/identity-ci-cd.md)
-- [Backend README](./backend/README.md)
-- [Plan de Migracion](../docs/migracion/plan-migracion-identity-access.md)
-- [ADR](../docs/ADR/documentoADR.md)
+La documentacion central esta en [Obsidian: Identity](../../../obsidian-hemia-kb/11-reviews/pending/identity/README.md).
+El expediente incluye CI/CD, despliegue, entorno, registry, OAuth y contratos.
+Las notas de cada release se generan desde los changelogs versionados de backend y frontend.
 
 ## Pruebas y organización
 

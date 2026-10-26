@@ -1,6 +1,11 @@
 import { IsIn, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 
 export class OAuthAuthorizeQueryDto {
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  @MaxLength(2048)
+  resource?: string;
+
   @IsString()
   @MaxLength(120)
   client_id: string;

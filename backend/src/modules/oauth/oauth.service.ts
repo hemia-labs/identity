@@ -56,7 +56,10 @@ export class OAuthService {
     const client = await this.findActiveClient(query.client_id);
     this.assertGrantAllowed(client, 'authorization_code');
     this.assertRedirectUriAllowed(client, query.redirect_uri);
-    this.assertScopesAllowed(client, query.scope);
+    const audience = query.resource
+      ? await this.audienceForResource(client, query.resource)
+      : client.audience;
+    this.assertScopesAllowed(client, query.scope, audience);
 
     if (client.type === OAuthClientType.Public && !query.code_challenge) {
       throw new BadRequestException('PKCE is required');
@@ -88,6 +91,7 @@ export class OAuthService {
         sessionId: user.sessionId,
         redirectUri: query.redirect_uri,
         scope: query.scope,
+        audience,
         codeChallenge: query.code_challenge,
         codeChallengeMethod: query.code_challenge_method,
         nonce: query.nonce,
@@ -197,7 +201,7 @@ export class OAuthService {
 
     return {
       active: true,
-      aud: tokenClient.audience,
+      aud: token.audience ?? tokenClient.audience,
       client_id: token.clientId,
       scope: token.scope,
       exp: Math.floor(token.expiresAt.getTime() / 1000),
@@ -263,6 +267,15 @@ export class OAuthService {
       throw new UnauthorizedException('Authorization code expired');
     }
 
+    if (
+      (dto.resource &&
+        (await this.audienceForResource(client, dto.resource)) !==
+          (code.audience ?? client.audience)) ||
+      (dto.audience && dto.audience !== (code.audience ?? client.audience))
+    )
+      throw new BadRequestException(
+        'resource does not match authorization code',
+      );
     this.assertPkce(
       dto.code_verifier,
       code.codeChallenge,
@@ -282,6 +295,8 @@ export class OAuthService {
       code.sessionId,
       code.scope,
       code.nonce,
+      undefined,
+      code.audience ?? client.audience,
     );
   }
 
@@ -302,6 +317,21 @@ export class OAuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
+    const audience = previousToken.audience ?? client.audience;
+    if (
+      (dto.resource &&
+        (await this.audienceForResource(client, dto.resource)) !== audience) ||
+      (dto.audience && dto.audience !== audience)
+    )
+      throw new BadRequestException('resource does not match refresh token');
+    const scope = dto.scope ?? previousToken.scope;
+    if (
+      !this.parseScopes(scope).every((code) =>
+        this.parseScopes(previousToken.scope).includes(code),
+      )
+    )
+      throw new BadRequestException('refresh scope cannot be expanded');
+    this.assertScopesAllowed(client, scope, audience);
     const revokedAt = new Date();
     const consumed = await this.tokensRepository.update(
       { id: previousToken.id, revokedAt: IsNull() },
@@ -326,9 +356,10 @@ export class OAuthService {
       client,
       previousToken.userId ?? undefined,
       previousToken.sessionId ?? undefined,
-      previousToken.scope,
+      scope,
       undefined,
       previousToken.familyId,
+      previousToken.audience ?? client.audience,
     );
   }
 
@@ -360,7 +391,12 @@ export class OAuthService {
       audience = destination.audience;
       allowedScopes = destination.scopes;
     } else {
-      if (dto.resource || (dto.audience && dto.audience !== client.audience))
+      if (
+        (dto.resource &&
+          (await this.audienceForResource(client, dto.resource)) !==
+            client.audience) ||
+        (dto.audience && dto.audience !== client.audience)
+      )
         throw new BadRequestException('destination is not allowed');
       audience = client.audience;
       allowedScopes = client.scopes;
@@ -405,6 +441,7 @@ export class OAuthService {
     }
 
     const scope = dto.scope ?? subject.scope;
+    // Access receives the client's identity scopes through its dedicated exchange grant.
     this.assertScopesAllowed(client, scope);
     const accessToken = await this.signAccessToken(
       client,
@@ -419,6 +456,7 @@ export class OAuthService {
         clientId: client.clientId,
         userId: subject.userId,
         sessionId: subject.sessionId,
+        audience,
         scope,
         familyId: subject.familyId,
         expiresAt: new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000),
@@ -441,16 +479,19 @@ export class OAuthService {
     scope: string,
     nonce?: string | null,
     familyId: string = randomUUID(),
+    audience: string = client.audience,
   ) {
     if (!userId || !sessionId) {
       throw new UnauthorizedException('Invalid refresh token subject');
     }
 
+    this.assertScopesAllowed(client, scope, audience);
     const accessToken = await this.signAccessToken(
       client,
       userId,
       sessionId,
       scope,
+      audience,
     );
     const refreshToken = this.createOpaqueToken();
     const expiresAt = new Date(Date.now() + ACCESS_TOKEN_SECONDS * 1000);
@@ -461,6 +502,7 @@ export class OAuthService {
         clientId: client.clientId,
         userId,
         sessionId,
+        audience,
         scope,
         familyId,
         expiresAt,
@@ -556,10 +598,7 @@ export class OAuthService {
       'app.issuer',
       'https://id.hemia.cloud',
     );
-    const audience =
-      client.clientId === client.audience
-        ? client.clientId
-        : [client.clientId, client.audience];
+    const audience = client.clientId;
     const options: JwtSignOptions = {
       algorithm: 'RS256',
       keyid: key.kid,
@@ -715,9 +754,52 @@ export class OAuthService {
     }
   }
 
-  private assertScopesAllowed(client: OAuthClientEntity, scope: string) {
+  private async audienceForResource(
+    client: OAuthClientEntity,
+    resource: string,
+  ): Promise<string> {
+    const destination = client.serviceDestinations?.find(
+      (d) => d.resource === resource,
+    );
+    if (destination) return destination.audience;
+    const [api]: { audience: string }[] =
+      await this.clientsRepository.manager.query(
+        'SELECT audience FROM oauth_apis WHERE audience=$1 AND resource=$2',
+        [client.audience, resource],
+      );
+    if (!api) throw new BadRequestException('resource is not allowed');
+    return api.audience;
+  }
+
+  private assertScopesAllowed(
+    client: OAuthClientEntity,
+    scope: string,
+    audience = client.audience,
+  ) {
     const requested = this.parseScopes(scope);
-    if (!requested.every((item) => client.scopes.includes(item))) {
+    const destination = client.serviceDestinations?.find(
+      (d) => d.audience === audience,
+    );
+    // Protocol permissions remain client-wide; API permissions belong to one destination.
+    const protocol = new Set([
+      'openid',
+      'profile',
+      'email',
+      'address',
+      'phone',
+      'offline_access',
+    ]);
+    const allowed = destination
+      ? [
+          ...destination.scopes,
+          ...client.scopes.filter(
+            (code) => audience === client.audience || protocol.has(code),
+          ),
+        ]
+      : audience === client.audience
+        ? client.scopes
+        : [];
+    if (!requested.every((item) => allowed.includes(item))) {
       throw new BadRequestException('scope is not allowed');
     }
   }

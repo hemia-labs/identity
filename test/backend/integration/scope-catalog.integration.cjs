@@ -1,48 +1,54 @@
-const assert=require('node:assert/strict');
-const path=require('node:path');
-const {createRequire}=require('node:module');
-const {randomUUID}=require('node:crypto');
-const backend=path.resolve(__dirname,'../../../backend');
-const requireBackend=createRequire(path.join(backend,'package.json'));
-const {DataSource}=requireBackend('typeorm');
-const {OAuthClientEntity}=require('../../../backend/dist/src/modules/oauth/entities/oauth-client.entity');
-const {OAuthClientsService}=require('../../../backend/dist/src/modules/oauth-clients/oauth-clients.service');
-const port=Number(process.env.OAUTH_DESTINATION_TEST_PORT);
-assert(Number.isInteger(port)&&port>0,'Use an isolated disposable database');
-const db=new DataSource({type:'postgres',host:'127.0.0.1',port,username:'postgres',password:'isolated-test-only',database:'identity_destinations_test',entities:[OAuthClientEntity],synchronize:false,migrationsRun:false});
-(async()=>{
- await db.initialize();
- try {
-  assert.equal((await db.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'"))[0].n,0);
-  await db.query(`CREATE TABLE oauth_clients(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),client_id varchar(120) UNIQUE,audience varchar(160),service_destinations jsonb,client_secret_hash varchar(255),type varchar(30),redirect_uris text[],grant_types text[],response_types text[],scopes text[],requires_consent boolean,status varchar(30),created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now(),deleted_at timestamptz)`);
-  const {OAuthScopeCatalog1792713600000}=require('../../../backend/dist/src/database/migrations/1792713600000-OAuthScopeCatalog');
-  const {OAuthScopesService}=require('../../../backend/dist/src/modules/oauth-scopes/oauth-scopes.service');
-  const repository=db.getRepository(OAuthClientEntity);
-  const original=await repository.save({id:randomUUID(),clientId:'existing-test-client',audience:'identity-api',type:'confidential',clientSecretHash:'existing-test-hash',grantTypes:['client_credentials'],redirectUris:[],responseTypes:[],scopes:[],requiresConsent:false,status:'active',serviceDestinations:[{resource:'https://identity.example',audience:'identity-api',scopes:['identity.tokens.introspect']}]});
-  await db.transaction(async manager=>new OAuthScopeCatalog1792713600000().up({query:(...args)=>manager.query(...args)}));
-  const catalog=new OAuthScopesService(db);
-  assert((await catalog.list()).some(s=>s.code==='identity.tokens.introspect'&&s.resource==='https://identity.example'));
-  const {PaymentConnectionScopes1792800000000}=require('../../../backend/dist/src/database/migrations/1792800000000-PaymentConnectionScopes');
-  await db.transaction(async manager=>new PaymentConnectionScopes1792800000000().up({query:(...args)=>manager.query(...args)}));
-  const paymentScopes=await catalog.list();
-  assert(paymentScopes.some(s=>s.audience==='billing-api'&&s.code==='billing.integrations.manage'&&s.resource===null));
-  assert(paymentScopes.some(s=>s.audience==='balanz-api'&&s.code==='billing.connections.check'));
-  const registered=await catalog.save({code:'notifications.messages.send',audience:'notifications-api',resource:'https://notifications.example/',name:'Enviar mensajes',description:'Synthetic test',enabled:true});
-  assert.equal(registered.resource,'https://notifications.example');
-  await assert.rejects(catalog.save({...registered,name:'Duplicate'}),e=>e.status===409);
-  assert.deepEqual((await repository.findOneByOrFail({id:original.id})).serviceDestinations,original.serviceDestinations);
-  const clients=new OAuthClientsService(repository);
-  const dto={clientId:'portal-notifications',audience:registered.audience,type:'confidential',grantTypes:['client_credentials'],responseTypes:[],redirectUris:[],scopes:[],requiresConsent:false,status:'active',serviceDestinations:[{resource:registered.resource,audience:registered.audience,scopes:[registered.code]}]};
-  const created=await clients.create(dto);
-  assert(created.clientSecret&&created.clientSecret.length>20);
-  assert(!('clientSecretHash' in created));
-  const saved=await repository.findOneByOrFail({id:created.id});
-  assert(await requireBackend('argon2').verify(saved.clientSecretHash,created.clientSecret));
-  assert.deepEqual(saved.serviceDestinations,dto.serviceDestinations);
-  assert.deepEqual(saved.scopes,[]);
-  const list=await clients.findAll();
-  assert(!JSON.stringify(list).includes(created.clientSecret));assert(!list.some(c=>'clientSecretHash' in c));
-  await assert.rejects(clients.create(dto),e=>e.status===409);
-  console.log('PASS scope catalog migration, registered scopes, exact generic client grants, duplicate conflicts and one-time secret handling on disposable PostgreSQL');
- }finally{await db.destroy();}
-})().catch(error=>{console.error(error);process.exitCode=1;});
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { createRequire } = require('node:module');
+const { randomUUID } = require('node:crypto');
+const backend = path.resolve(__dirname, '../../../backend');
+const requireBackend = createRequire(path.join(backend, 'package.json'));
+const { DataSource } = requireBackend('typeorm');
+const { OAuthClientEntity } = require('../../../backend/dist/src/modules/oauth/entities/oauth-client.entity');
+const { OAuthClientsService } = require('../../../backend/dist/src/modules/oauth-clients/oauth-clients.service');
+const { OAuthScopesService } = require('../../../backend/dist/src/modules/oauth-scopes/oauth-scopes.service');
+const { OAuthApisService } = require('../../../backend/dist/src/modules/oauth-scopes/oauth-apis.service');
+const port = Number(process.env.OAUTH_DESTINATION_TEST_PORT);
+assert.equal(process.env.IDENTITY_ISOLATED_DATABASE, '1', 'Use postgres.docker.sh');
+assert(Number.isInteger(port) && port > 0, 'Disposable database port required');
+const db = new DataSource({ type: 'postgres', host: '127.0.0.1', port,
+  username: 'postgres', password: 'isolated-test-only', database: 'identity_destinations_test',
+  entities: [path.join(backend, 'dist/src/**/*.entity.js')],
+  migrations: [path.join(backend, 'dist/src/database/migrations/*.js')],
+  synchronize: false, migrationsRun: false });
+(async () => {
+  await db.initialize();
+  try {
+    assert.equal((await db.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'"))[0].n, 0);
+    await db.runMigrations();
+    const catalog = new OAuthScopesService(db);
+    const apis = new OAuthApisService(db);
+    const repository = db.getRepository(OAuthClientEntity);
+    const original = await repository.save({ id: randomUUID(), clientId: 'existing-test-client', audience: 'identity-api', type: 'confidential', clientSecretHash: 'existing-test-hash', grantTypes: ['client_credentials'], redirectUris: [], responseTypes: [], scopes: [], requiresConsent: false, status: 'active', serviceDestinations: [{ resource: 'https://identity.example', audience: 'identity-api', scopes: ['identity.tokens.introspect'] }] });
+    const registered = await catalog.save({ code: 'notifications.messages.send', name: 'Enviar mensajes', description: 'Synthetic test', enabled: true });
+    assert.equal(registered.kind, 'api');
+    assert(!('audience' in registered)); assert(!('resource' in registered));
+    await assert.rejects(catalog.save({ ...registered, name: 'Duplicate' }), e => e.status === 409);
+    const api = await apis.save({ audience: 'notifications-api', resource: 'https://notifications.example/', name: 'Notifications', enabled: true, scopes: [registered.code] });
+    assert.equal(api.resource, 'https://notifications.example');
+    assert.deepEqual(api.scopes, [registered.code]);
+    await assert.rejects(apis.save({ ...api, name: 'Duplicate API' }), e => e.status === 409);
+    assert.deepEqual((await repository.findOneByOrFail({ id: original.id })).serviceDestinations, original.serviceDestinations);
+    const clients = new OAuthClientsService(repository);
+    const dto = { clientId: 'portal-notifications', audience: api.audience, type: 'confidential', grantTypes: ['client_credentials'], responseTypes: [], redirectUris: [], scopes: [], requiresConsent: false, status: 'active', serviceDestinations: [{ resource: api.resource, audience: api.audience, scopes: [registered.code] }] };
+    const created = await clients.create(dto);
+    assert(created.clientSecret && created.clientSecret.length > 20);
+    assert(!('clientSecretHash' in created));
+    const saved = await repository.findOneByOrFail({ id: created.id });
+    assert(await requireBackend('argon2').verify(saved.clientSecretHash, created.clientSecret));
+    assert.deepEqual(saved.serviceDestinations, dto.serviceDestinations);
+    assert.deepEqual(saved.scopes, []);
+    const list = await clients.findAll();
+    assert(!JSON.stringify(list).includes(created.clientSecret));
+    assert(!list.some(c => 'clientSecretHash' in c));
+    await assert.rejects(clients.create(dto), e => e.status === 409);
+    assert((await catalog.list()).some(s => s.code === registered.code));
+    console.log('PASS: real migrations, global scope/API catalog, duplicate conflicts, unchanged grants and one-time client secrets');
+  } finally { await db.destroy(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

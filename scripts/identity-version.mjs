@@ -74,7 +74,7 @@ function notes() {
     assert(entry, `Missing ${name} changelog entry for ${version}`);
     sections.push(`## ${name}\n\n${entry.slice(version.length).trim()}`);
   }
-  console.log(sections.join('\n\n') + '\n\n' + readFileSync(join(root, 'docs/release-notes.md'), 'utf8'));
+  console.log(sections.join('\n\n'));
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

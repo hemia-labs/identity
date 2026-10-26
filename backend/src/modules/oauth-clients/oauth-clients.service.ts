@@ -1,3 +1,4 @@
+import { assertClientCatalog } from '../oauth-scopes/oauth-catalog-policy';
 import {
   BadRequestException,
   ConflictException,
@@ -32,6 +33,11 @@ export class OAuthClientsService {
   ) {}
 
   async create(dto: CreateOAuthClientDto) {
+    await assertClientCatalog(this.clientsRepository.manager, {
+      audience: dto.audience,
+      scopes: dto.scopes ?? [],
+      serviceDestinations: dto.serviceDestinations,
+    });
     const confidential = dto.type === OAuthClientType.Confidential;
     const secret = confidential ? this.generateSecret() : null;
 
@@ -76,6 +82,11 @@ export class OAuthClientsService {
 
   async update(id: string, dto: UpdateOAuthClientDto) {
     const client = await this.findEntity(id);
+    await assertClientCatalog(
+      this.clientsRepository.manager,
+      { ...client, ...dto },
+      client,
+    );
     Object.assign(client, {
       ...dto,
       clientId: dto.clientId?.toLowerCase() ?? client.clientId,
@@ -111,6 +122,11 @@ export class OAuthClientsService {
         throw new ConflictException(
           'Configure explicit destinations before adding a destination; existing service permissions must be preserved',
         );
+      await assertClientCatalog(
+        manager,
+        { ...client, serviceDestinations: [dto] },
+        client,
+      );
       const destinations = client.serviceDestinations.map((destination) => ({
         ...destination,
         scopes: [...destination.scopes],
@@ -254,7 +270,14 @@ export class OAuthClientsService {
     value: string,
   ): Promise<OAuthClientView> {
     const client = await this.findEntity(id);
+    const previous = { ...client };
     client[key] = [...new Set([...(client[key] ?? []), value])];
+    if (key === 'scopes')
+      await assertClientCatalog(
+        this.clientsRepository.manager,
+        client,
+        previous,
+      );
     return this.toView(await this.clientsRepository.save(client));
   }
 

@@ -22,9 +22,9 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ../test/backend/jest-e2e.json",
+    "test:e2e": "cd .. && IDENTITY_ENV_FILE=/dev/null docker compose --env-file /dev/null build && python3 test/docker/smoke.py",
     "test:typecheck": "tsc --noEmit -p ../test/backend/tsconfig.json",
-    "test:seed:docker": "bun run build && bash ../test/backend/integration/seed-clients.docker.sh"
+    "test:seed:docker": "bun run build && bash ../test/backend/integration/postgres.docker.sh seed-clients"
   },
   "dependencies": {
     "@hemia/email-sender": "^0.0.3",
