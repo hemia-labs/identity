@@ -1,3 +1,5 @@
+import { OAuthApisController } from '../oauth-scopes/oauth-apis.controller';
+import { OAuthApisService } from '../oauth-scopes/oauth-apis.service';
 import { OAuthScopesController } from '../oauth-scopes/oauth-scopes.controller';
 import { OAuthScopesService } from '../oauth-scopes/oauth-scopes.service';
 import { Module } from '@nestjs/common';
@@ -11,9 +13,14 @@ import { OAuthClientsService } from './oauth-clients.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([OAuthClientEntity, OAuthTokenEntity])],
-  controllers: [OAuthClientsController, OAuthScopesController],
+  controllers: [
+    OAuthClientsController,
+    OAuthScopesController,
+    OAuthApisController,
+  ],
   providers: [
     OAuthScopesService,
+    OAuthApisService,
     OAuthClientsService,
     AccessAdminGuard,
     IdentityAdminGuard,

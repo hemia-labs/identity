@@ -35,12 +35,12 @@ APP_CORS_ORIGINS=https://id.hemia.cloud,https://billing.hemia.cloud,https://cons
 DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=hemia
-DB_PASSWORD=hemia
+DB_PASSWORD=<db-password>
 DB_DATABASE=hemia_id
 DB_SSL=false
 
-JWT_ACCESS_SECRET=change_me_at_least_32_chars_access
-JWT_REFRESH_SECRET=change_me_at_least_32_chars_refresh
+JWT_ACCESS_SECRET=<jwt-access-secret>
+JWT_REFRESH_SECRET=<jwt-refresh-secret>
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 
@@ -80,7 +80,7 @@ await fetch('https://id.hemia.cloud/api/v1/auth/login', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     identifier: 'user@hemia.cloud',
-    password: 'password123',
+    password: '<password>',
   }),
 });
 ```
@@ -172,9 +172,9 @@ Variables necesarias:
 
 ```env
 GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+GOOGLE_CLIENT_SECRET=<google-client-secret>
 GOOGLE_CALLBACK_URL=https://id.hemia.cloud/api/v1/auth/google/callback
-OAUTH_STATE_SECRET=change_me_at_least_32_chars
+OAUTH_STATE_SECRET=<oauth-state-secret>
 AUTH_ALLOWED_REDIRECT_URIS=https://console.hemia.cloud/auth/callback
 ```
 
@@ -714,7 +714,7 @@ El codigo actual configura una sola conexion TypeORM con:
 DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=hemia
-DB_PASSWORD=hemia
+DB_PASSWORD=<db-password>
 DB_DATABASE=hemia_id
 ```
 
@@ -966,7 +966,7 @@ SUPER_ADMIN_EMAIL=admin@hemia.cloud
 SUPER_ADMIN_USERNAME=superadmin
 SUPER_ADMIN_FIRST_NAME=Hemia
 SUPER_ADMIN_LAST_NAME=Admin
-SUPER_ADMIN_PASSWORD=change_me_strong_password
+SUPER_ADMIN_PASSWORD=<super-admin-password>
 
 JWKS_KEY_KID=local-dev-rs256
 JWKS_PRIVATE_KEY="<clave RSA privada en PEM>"
@@ -975,7 +975,7 @@ JWKS_PRIVATE_KEY="<clave RSA privada en PEM>"
 Ejecutar en local:
 
 ```bash
-SUPER_ADMIN_PASSWORD='change_me_strong_password' bun --cwd backend seed:run
+SUPER_ADMIN_PASSWORD='<super-admin-password>' bun --cwd backend seed:run
 ```
 
 Ejecutar con datos completos:
@@ -985,7 +985,7 @@ SUPER_ADMIN_EMAIL='admin@hemia.cloud' \
 SUPER_ADMIN_USERNAME='superadmin' \
 SUPER_ADMIN_FIRST_NAME='Hemia' \
 SUPER_ADMIN_LAST_NAME='Admin' \
-SUPER_ADMIN_PASSWORD='change_me_strong_password' \
+SUPER_ADMIN_PASSWORD='<super-admin-password>' \
 JWKS_KEY_KID='prod-rs256-2026-01' \
 JWKS_PRIVATE_KEY='<clave RSA privada en PEM>' \
 bun --cwd backend seed:run
@@ -996,4 +996,4 @@ Para JWKS, conserva cualquier clave activa existente, aunque cambien las variabl
 
 ## Ubicación de pruebas
 
-Las pruebas están en [`../test/backend/`](../test/README.md). `bun run test` ejecuta Jest, `bun run test:typecheck` verifica tipos y `bun run test:e2e` queda reservado para un entorno aislado configurado explícitamente.
+Las pruebas están en [`../test/backend/`](../test/README.md). `bun run test` ejecuta Jest, `bun run test:typecheck` verifica tipos y `bun run test:e2e` construye las imágenes y ejecuta el smoke con PostgreSQL desechable, sin cargar entornos residentes.

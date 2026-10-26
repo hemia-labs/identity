@@ -5,7 +5,9 @@ Todas las pruebas viven en `identity/test/`; no agregar pruebas a `src/`, a los 
 ## Estructura
 
 - `backend/unit/`: pruebas Jest por módulo y pruebas de guards compartidos.
-- `backend/e2e/`: pruebas E2E de Nest, con configuración `backend/jest-e2e.json`.
+- `backend/integration/`: migraciones, catálogo, concurrencia y seeds sobre PostgreSQL desechable.
+- `docker/`: E2E de imágenes, runtime, salud, OAuth/OIDC y login.
+- `deploy/`: validación de releases, flags y rollback sin ejecutar comandos reales contra servidores.
 - `auth/unit/`: pruebas Bun del core y del adaptador SvelteKit del SDK.
 - `auth/package/`: comprobaciones del build NestJS/CJS/ESM y del tarball del SDK.
 - `frontend/`: pruebas Vue con Vitest y jsdom.
@@ -23,7 +25,7 @@ bun run test:tarball
 
 `test` ejecuta las suites unitarias de backend, SDK y frontend, más las pruebas de release, una vez y sin modo watch. `test:package` compila el SDK y comprueba sus exports CJS/ESM. `test:tarball` necesita el SDK compilado y acceso a npm para instalar dependencias en un consumidor temporal; no publica ni guarda tarballs en vendor.
 
-Desde `backend/`, `bun run test --runInBand` ejecuta las unitarias y `bun run test:typecheck` comprueba los tipos de las pruebas. `bun run test:e2e` es manual: monta AppModule y requiere servicios y configuración explícitos. No forma parte de la suite unitaria; usar un entorno aislado, nunca la base de producción. No ejecutar migraciones ni seeds automáticamente para prepararlo.
+Desde `backend/`, `bun run test --runInBand` ejecuta las unitarias y `bun run test:typecheck` comprueba sus tipos. `bun run test:e2e` construye las imágenes y ejecuta el smoke Docker con PostgreSQL temporal y credenciales sintéticas. Nunca carga el entorno de producción. Las migraciones y seeds se ejecutan explícitamente solo en esa base temporal.
 
 Desde `packages/auth/`, usar `bun run test`, `bun run typecheck`, `bun run build` y `bun run test:built`.
 
@@ -38,3 +40,11 @@ El SDK agrupa sus clientes en `packages/auth/src/core/clients/` y su lógica de 
 ## Seed de clientes OAuth
 
 Desde `backend/`, `bun run test:seed:docker` compila y crea un PostgreSQL desechable. Ejecuta explícitamente las migraciones y el seed tres veces: conserva `docs` y `helpdesk`, no recrea los clientes retirados, mantiene los ocho scopes de `legal` y comprueba que no cambian usuarios, contraseñas, clientes, secretos, configuración, estados, timestamps ni claves JWKS, incluso con datos personalizados y sin secretos de bootstrap. El runner no carga `.env` ni toca la base configurada; elimina su contenedor y volumen al terminar.
+
+## Integraciones PostgreSQL
+
+`bun run test:integration:postgres` compila el backend y ejecuta seeds, catálogo, destinos concurrentes y migración del catálogo único. El runner `backend/integration/postgres.docker.sh` admite `all` o el nombre de una suite; crea una base vacía por suite y elimina el contenedor incluso si falla. No ejecutar los archivos `.integration.cjs` directamente ni usar puertos o variables de una base residente.
+
+Identity CI ejecuta estas integraciones, las unitarias, las pruebas de release de Identity, deploy/rollback y Docker. Auth package ejecuta las del SDK, publicación Auth y artefactos CJS/ESM/tarball; no se duplican las pruebas de release Auth en ambos jobs. `bun run test:release` permite ejecutarlas todas localmente.
+
+El flujo `payments-flow.docker.sh` y sus fixtures siguen siendo una suite manual entre repositorios, documentada en `backend/integration/payments-flow.README.md`. Conserva esa cobertura y no exige los otros repositorios para el CI ordinario de Identity.

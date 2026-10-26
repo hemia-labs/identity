@@ -17,7 +17,8 @@
     "test:release": "node --test test/release/*.test.mjs",
     "test:package": "bun run --cwd packages/auth build && node test/auth/package/built-nestjs.cjs",
     "test:tarball": "node test/auth/package/check-auth-tarball.mjs",
-    "version:identity": "node scripts/version-identity.mjs"
+    "version:identity": "node scripts/version-identity.mjs",
+    "test:integration:postgres": "bun run --cwd backend build && bash test/backend/integration/postgres.docker.sh all"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1"

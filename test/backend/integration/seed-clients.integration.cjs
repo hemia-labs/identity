@@ -31,6 +31,7 @@ const expectedLegalScopes = [
   'legal.self.pending.read', 'legal.self.acceptances.create', 'legal.self.acceptances.read',
 ];
 
+assert.equal(process.env.IDENTITY_ISOLATED_DATABASE, '1', 'Use postgres.docker.sh with a fresh disposable database');
 (async () => {
   await source.initialize();
   assert.equal((await source.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'"))[0].n, 0, 'Requires a fresh disposable database');

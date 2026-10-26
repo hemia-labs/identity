@@ -88,6 +88,8 @@ with tempfile.TemporaryDirectory(prefix='identity-docker-') as directory:
                 time.sleep(1)
         else:
             raise RuntimeError('Backend did not start')
+        check_http('backend', '/api/v1/health/startup', "r.status===200 && body.status==='ok'")
+        check_http('backend', '/api/v1/missing', "r.status===404 && body.statusCode===404 && body.message==='Cannot GET /api/v1/missing'")
         check_http('backend', '/api/v1/health/ready',
                    "r.status===503 && body.reason==='pending_migrations'")
         print('PASS: startup does not apply migrations', flush=True)

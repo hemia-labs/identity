@@ -31,6 +31,9 @@ export class OAuthAuthorizationCodeEntity {
   @Column({ name: 'redirect_uri', type: 'text' })
   redirectUri: string;
 
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  audience?: string | null;
+
   @Column({ type: 'text' })
   scope: string;
 

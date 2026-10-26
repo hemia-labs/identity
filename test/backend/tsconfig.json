@@ -51,7 +51,6 @@
     ]
   },
   "include": [
-    "unit/**/*.spec.ts",
-    "e2e/**/*.ts"
+    "unit/**/*.spec.ts"
   ]
 }

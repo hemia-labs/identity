@@ -10,6 +10,7 @@ const {OAuthClientsService}=require('../../../backend/dist/src/modules/oauth-cli
 const port=Number(process.env.OAUTH_DESTINATION_TEST_PORT);
 assert(Number.isInteger(port)&&port>0,'Use an isolated disposable database');
 const db=new DataSource({type:'postgres',host:'127.0.0.1',port,username:'postgres',password:'isolated-test-only',database:'identity_destinations_test',entities:[path.join(backend,'dist/src/**/*.entity.js')],migrations:[path.join(backend,'dist/src/database/migrations/*.js')],synchronize:false,migrationsRun:false});
+assert.equal(process.env.IDENTITY_ISOLATED_DATABASE, '1', 'Use postgres.docker.sh with a fresh disposable database');
 (async()=>{
  await db.initialize();
  try {
@@ -17,6 +18,13 @@ const db=new DataSource({type:'postgres',host:'127.0.0.1',port,username:'postgre
   await db.runMigrations();
   const repository=db.getRepository(OAuthClientEntity);
   const row=await repository.save({id:randomUUID(),clientId:'legal-test',audience:'identity-api',serviceDestinations:[{resource:'https://identity.example',audience:'identity-api',scopes:['identity.oauth_clients.read']}],clientSecretHash:await requireBackend('argon2').hash('isolated-test-secret'),type:'confidential',grantTypes:['client_credentials'],redirectUris:[],responseTypes:[],scopes:['untouched'],requiresConsent:false,status:'active'});
+  const {OAuthScopesService}=require('../../../backend/dist/src/modules/oauth-scopes/oauth-scopes.service');
+  const {OAuthApisService}=require('../../../backend/dist/src/modules/oauth-scopes/oauth-apis.service');
+  const catalog=new OAuthScopesService(db),apis=new OAuthApisService(db);
+  for(const code of ['legal.consumer_context.read','additional','retained-concurrent','restored']) {
+    if(!(await catalog.list()).some(s=>s.code===code))await catalog.save({code,name:code,description:'Synthetic concurrency fixture',enabled:true});
+  }
+  for(let i=0;i<8;i++)await apis.save({name:'Test API '+i,audience:`service${i}-api`,resource:`https://service${i}.example`,enabled:true,scopes:['legal.consumer_context.read','additional','retained-concurrent','restored']});
   const service=new OAuthClientsService(repository);
   await Promise.all(Array.from({length:8},(_,i)=>service.ensureServiceDestination(row.id,{resource:`https://service${i}.example`,audience:`service${i}-api`,scopes:['legal.consumer_context.read']})));
   let saved=await repository.findOneByOrFail({id:row.id});
@@ -26,7 +34,7 @@ const db=new DataSource({type:'postgres',host:'127.0.0.1',port,username:'postgre
   assert.equal(saved.serviceDestinations.length,9);
   assert.deepEqual(saved.serviceDestinations.find(d=>d.resource==='https://service0.example').scopes,['legal.consumer_context.read','additional']);
   for(const key of ['clientSecretHash','clientId','audience','scopes','grantTypes','redirectUris','responseTypes','requiresConsent','status'])assert.deepEqual(saved[key],row[key]);
-  await assert.rejects(service.ensureServiceDestination(row.id,{resource:'https://different.example',audience:'service0-api',scopes:['legal.consumer_context.read']}),e=>e.status===409);
+  await assert.rejects(service.ensureServiceDestination(row.id,{resource:'https://different.example',audience:'service0-api',scopes:['legal.consumer_context.read']}),e=>e.status===400);
   assert.deepEqual((await repository.findOneByOrFail({id:row.id})).serviceDestinations,saved.serviceDestinations);
   await Promise.all([
     service.removeServiceDestinationScopes(row.id,{resource:'https://service0.example',audience:'service0-api',scopes:['additional']}),

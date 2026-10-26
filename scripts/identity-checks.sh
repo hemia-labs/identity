@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 bun install --frozen-lockfile
-node --test test/release/*.test.mjs
+node --test test/release/identity-version.test.mjs
 bun run --cwd backend test --runInBand
 bun run --cwd backend build
+bash test/backend/integration/postgres.docker.sh all
 bun run --cwd frontend type-check
 bun run --cwd frontend test --run
 python3 -m unittest discover -s test/deploy -p 'test_*.py'

@@ -48,7 +48,15 @@ function fixture() {
   const service = new OAuthClientsService({
     manager: {
       transaction: (work: (m: unknown) => unknown) =>
-        work({ getRepository: () => repository }),
+        work({
+          getRepository: () => repository,
+          query: (sql: string) =>
+            Promise.resolve(
+              sql.includes('oauth_apis')
+                ? [{ ...destination, enabled: true }]
+                : [{ code: destination.scopes[0], kind: 'api', enabled: true }],
+            ),
+        }),
     },
   } as unknown as Repository<OAuthClientEntity>);
   return { row, repository, service };
