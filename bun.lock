@@ -10,7 +10,7 @@
     },
     "backend": {
       "name": "backend",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "dependencies": {
         "@hemia/email-sender": "^0.0.3",
         "@nestjs/common": "^11.0.1",
@@ -67,7 +67,7 @@
     },
     "frontend": {
       "name": "frontend",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "dependencies": {
         "@tailwindcss/vite": "^4.3.0",
         "@tanstack/vue-query": "^5.101.0",
