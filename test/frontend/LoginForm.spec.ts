@@ -31,6 +31,19 @@ beforeEach(() => {
 })
 
 describe('LoginForm', () => {
+  it('offers Google first and reveals the password form on request', async () => {
+    const wrapper = render()
+    expect(wrapper.findAll('button')[0]!.text()).toBe('Iniciar sesión con Google')
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.find('input[type="password"]').exists()).toBe(false)
+    await wrapper.findAll('button').find(button => button.text() === 'Continuar con contraseña')!.trigger('click')
+    expect(wrapper.find('form').exists()).toBe(true)
+    expect(wrapper.find('input[type="email"]').exists()).toBe(true)
+    expect(wrapper.find('input[type="password"]').exists()).toBe(true)
+    expect(mutateAsync).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('starts Google login without submitting password credentials', async () => {
     const wrapper = render()
     const button = wrapper.findAll('button').find(button => button.text() === 'Iniciar sesión con Google')!
@@ -42,6 +55,7 @@ describe('LoginForm', () => {
 
   it.each([undefined, ''])('shows a required message for password %s without calling login', async password => {
     const wrapper = render()
+    await wrapper.findAll('button').find(button => button.text() === 'Continuar con contraseña')!.trigger('click')
     await wrapper.get('input[type="email"]').setValue('person@example.com')
     if (password !== undefined) await wrapper.get('input[type="password"]').setValue(password)
     await wrapper.get('form').trigger('submit')
@@ -53,6 +67,7 @@ describe('LoginForm', () => {
   })
   it('shows the length message for a short password without calling login', async () => {
     const wrapper = render()
+    await wrapper.findAll('button').find(button => button.text() === 'Continuar con contraseña')!.trigger('click')
     await wrapper.get('input[type="email"]').setValue('person@example.com')
     await wrapper.get('input[type="password"]').setValue('short')
     await wrapper.get('form').trigger('submit')
@@ -69,6 +84,7 @@ describe('LoginForm', () => {
       throw error
     })
     const wrapper = render()
+    await wrapper.findAll('button').find(button => button.text() === 'Continuar con contraseña')!.trigger('click')
     await wrapper.get('input[type="email"]').setValue('person@example.com')
     await wrapper.get('input[type="password"]').setValue('example-password')
     await wrapper.get('form').trigger('submit')
