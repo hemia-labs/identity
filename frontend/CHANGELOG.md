@@ -1,5 +1,11 @@
 # frontend
 
+## 1.1.1
+
+### Patch Changes
+
+- 0a0c50e: Make Google the primary sign-in option with its official icon and reveal the existing password form through a secondary button.
+
 ## 1.1.0
 
 ### Minor Changes
