@@ -1,5 +1,11 @@
 # backend
 
+## 1.1.0
+
+### Minor Changes
+
+- c2515dc: Add invitation registration and acceptance with Google sign-in return flow.
+
 ## 1.0.3
 
 ### Patch Changes
