@@ -4,7 +4,8 @@ import { createPinia } from 'pinia'
 import { ref } from 'vue'
 import LoginForm from '../../frontend/src/features/auth/components/LoginForm.vue'
 
-const { mutateAsync, push } = vi.hoisted(() => ({ mutateAsync: vi.fn(), push: vi.fn() }))
+const { mutateAsync, push, startGoogleLogin } = vi.hoisted(() => ({ mutateAsync: vi.fn(), push: vi.fn(), startGoogleLogin: vi.fn() }))
+vi.mock('@/features/auth/google-login', () => ({ startGoogleLogin }))
 const mutationError = ref<unknown>(null)
 vi.mock('@/features/identity/composables/useIdentityApi', () => ({
   useLoginMutation: () => ({ mutateAsync, error: mutationError, isPending: ref(false) }),
@@ -30,6 +31,15 @@ beforeEach(() => {
 })
 
 describe('LoginForm', () => {
+  it('starts Google login without submitting password credentials', async () => {
+    const wrapper = render()
+    const button = wrapper.findAll('button').find(button => button.text() === 'Iniciar sesión con Google')!
+    await button.trigger('click')
+    expect(startGoogleLogin).toHaveBeenCalledWith(null)
+    expect(mutateAsync).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it.each([undefined, ''])('shows a required message for password %s without calling login', async password => {
     const wrapper = render()
     await wrapper.get('input[type="email"]').setValue('person@example.com')

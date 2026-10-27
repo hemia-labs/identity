@@ -2,11 +2,13 @@ import {
   BadRequestException,
   ExecutionContext,
   Injectable,
+  ForbiddenException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
+import { isObservable, lastValueFrom } from 'rxjs';
 import { AuthService } from '../auth.service';
 import { OAUTH_STATE_COOKIE } from '../constants/auth.constants';
 
@@ -26,7 +28,41 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     ) {
       throw new ServiceUnavailableException('Google sign-in is not configured');
     }
-    return super.canActivate(context);
+    return this.authenticate(context);
+  }
+
+  private async authenticate(context: ExecutionContext): Promise<boolean> {
+    try {
+      const result = super.canActivate(context);
+      return await (isObservable(result) ? lastValueFrom(result) : result);
+    } catch (error) {
+      const request = context.switchToHttp().getRequest<Request>();
+      const state = request.query.state;
+      // Only return to a signed, allowed destination bound to this browser.
+      if (
+        typeof state !== 'string' ||
+        state !== request.cookies?.[OAUTH_STATE_COOKIE]
+      ) {
+        throw error;
+      }
+      const redirect = new URL(
+        this.authService.resolveGoogleRedirectUri(state),
+      );
+      redirect.searchParams.set(
+        'error',
+        error instanceof ForbiddenException &&
+          error.message === 'GOOGLE_ACCOUNT_LINK_REQUIRED'
+          ? 'account_link_required'
+          : 'google_auth_failed',
+      );
+      const response = context.switchToHttp().getResponse<Response>();
+      response.clearCookie(OAUTH_STATE_COOKIE, {
+        domain: this.configService.get<string | undefined>('cookie.domain'),
+        path: '/',
+      });
+      response.redirect(redirect.toString());
+      return false;
+    }
   }
 
   getAuthenticateOptions(context: ExecutionContext): { state?: string } {

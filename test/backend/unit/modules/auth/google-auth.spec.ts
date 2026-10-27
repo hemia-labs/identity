@@ -1,5 +1,6 @@
 import {
   ExecutionContext,
+  ForbiddenException,
   Provider,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import { ExternalAccountsService } from '../../../../../backend/src/modules/exte
 import { AuthModule } from '../../../../../backend/src/modules/auth/auth.module';
 import { AuthService } from '../../../../../backend/src/modules/auth/auth.service';
 import { GoogleAuthGuard } from '../../../../../backend/src/modules/auth/google/google-auth.guard';
+import { OAUTH_STATE_COOKIE } from '../../../../../backend/src/modules/auth/constants/auth.constants';
 import { GoogleStrategy } from '../../../../../backend/src/modules/auth/google/google.strategy';
 
 const production = {
@@ -100,5 +102,68 @@ describe('Optional Google authentication', () => {
     expect(() => guard.canActivate({} as ExecutionContext)).toThrow(
       ServiceUnavailableException,
     );
+  });
+});
+
+describe('Google callback failure redirects', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  const setup = (cookie = 'signed-state') => {
+    const response = { redirect: jest.fn(), clearCookie: jest.fn() };
+    const request = {
+      query: { state: 'signed-state', error: 'access_denied' },
+      cookies: { [OAUTH_STATE_COOKIE]: cookie },
+    };
+    const auth = {
+      resolveGoogleRedirectUri: jest
+        .fn()
+        .mockReturnValue('https://id.example.test/auth/callback'),
+    };
+    const guard = new GoogleAuthGuard(
+      auth as unknown as AuthService,
+      new ConfigService({
+        GOOGLE_CLIENT_ID: 'id',
+        GOOGLE_CLIENT_SECRET: 'secret',
+      }),
+    );
+    const context = {
+      switchToHttp: () => ({
+        getRequest: () => request,
+        getResponse: () => response,
+      }),
+    } as unknown as ExecutionContext;
+    return { guard, context, response, auth, request };
+  };
+
+  it.each([
+    [new Error('cancelled'), 'google_auth_failed'],
+    [
+      new ForbiddenException('GOOGLE_ACCOUNT_LINK_REQUIRED'),
+      'account_link_required',
+    ],
+  ])(
+    'returns a closed error code after validating browser state',
+    async (error, code) => {
+      jest
+        .spyOn(Object.getPrototypeOf(GoogleAuthGuard.prototype), 'canActivate')
+        .mockRejectedValue(error);
+      const { guard, context, response, auth } = setup();
+      await expect(guard.canActivate(context)).resolves.toBe(false);
+      expect(auth.resolveGoogleRedirectUri).toHaveBeenCalledWith(
+        'signed-state',
+      );
+      expect(response.redirect).toHaveBeenCalledWith(
+        `https://id.example.test/auth/callback?error=${code}`,
+      );
+    },
+  );
+
+  it('does not redirect when browser state does not match', async () => {
+    jest
+      .spyOn(Object.getPrototypeOf(GoogleAuthGuard.prototype), 'canActivate')
+      .mockRejectedValue(new Error('invalid state'));
+    const { guard, context, response } = setup('wrong-state');
+    await expect(guard.canActivate(context)).rejects.toThrow();
+    expect(response.redirect).not.toHaveBeenCalled();
   });
 });

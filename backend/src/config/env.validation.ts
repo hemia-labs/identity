@@ -34,6 +34,7 @@ export const envValidationSchema = Joi.object({
   SMTP_PASS: Joi.string().empty('').optional(),
   EMAIL_FROM_APP: Joi.string().default('Hemia ID'),
   ACCESS_API_URL: Joi.string().uri().required(),
+  ACCESS_ISSUER: Joi.string().uri().optional(),
   ACCESS_JWKS_URI: Joi.string().uri().required(),
   ACCESS_AUDIENCE: Joi.string().default('access-api'),
 

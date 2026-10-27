@@ -41,19 +41,19 @@ export class ExternalAccountsService {
       });
 
       if (user) {
-        this.assertActive(user);
-        user.avatarUrl = input.avatarUrl ?? user.avatarUrl;
-      } else {
-        const { firstName, lastName } = this.splitName(input.name, email);
-        user = usersRepository.create({
-          email,
-          firstName,
-          lastName,
-          avatarUrl: input.avatarUrl,
-          passwordHash: null,
-          status: UserStatus.Active,
-        });
+        // Matching email alone does not prove ownership of the existing Identity account.
+        throw new ForbiddenException('GOOGLE_ACCOUNT_LINK_REQUIRED');
       }
+
+      const { firstName, lastName } = this.splitName(input.name, email);
+      user = usersRepository.create({
+        email,
+        firstName,
+        lastName,
+        avatarUrl: input.avatarUrl,
+        passwordHash: null,
+        status: UserStatus.Active,
+      });
 
       user = await usersRepository.save(user);
 

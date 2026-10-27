@@ -4,7 +4,6 @@ import {
   UserEntity,
   UserStatus,
 } from '../../../../../backend/src/modules/users/entities/user.entity';
-import { ExternalAccountProvider } from '../../../../../backend/src/modules/external-accounts/entities/external-account-provider.enum';
 import { ExternalAccountEntity } from '../../../../../backend/src/modules/external-accounts/entities/external-account.entity';
 import { ExternalAccountsService } from '../../../../../backend/src/modules/external-accounts/external-accounts.service';
 
@@ -89,24 +88,27 @@ describe('ExternalAccountsService', () => {
     expect(externalAccountsRepository.save).not.toHaveBeenCalled();
   });
 
-  it('links Google account to existing active user by verified email', async () => {
-    const { service, externalAccountsRepository } = createService({
-      existingUser: activeUser,
-    });
+  it('requires explicit linking for an existing email without changing the user', async () => {
+    const { service, externalAccountsRepository, usersRepository } =
+      createService({
+        existingUser: activeUser,
+      });
+    await expect(service.findOrCreateGoogleUser(googleInput)).rejects.toThrow(
+      'GOOGLE_ACCOUNT_LINK_REQUIRED',
+    );
+    expect(usersRepository.save).not.toHaveBeenCalled();
+    expect(externalAccountsRepository.save).not.toHaveBeenCalled();
+  });
 
+  it('rejects an inactive linked user', async () => {
+    const { service } = createService({
+      existingAccount: {
+        user: { ...activeUser, status: UserStatus.Inactive },
+      },
+    });
     await expect(
       service.findOrCreateGoogleUser(googleInput),
-    ).resolves.toMatchObject({
-      id: 'user-id',
-      email: 'user@hemia.cloud',
-    });
-    expect(externalAccountsRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: ExternalAccountProvider.Google,
-        providerAccountId: 'google-123',
-        userId: 'user-id',
-      }),
-    );
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('creates active user and Google link when email is new', async () => {

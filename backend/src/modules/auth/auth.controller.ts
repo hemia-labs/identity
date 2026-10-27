@@ -1,5 +1,8 @@
 import {
   BadRequestException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
   Body,
   Controller,
   Get,
@@ -20,6 +23,11 @@ import {
   OAUTH_STATE_COOKIE,
   REFRESH_TOKEN_COOKIE,
 } from './constants/auth.constants';
+import { InvitationOnboardingService } from './invitation-onboarding.service';
+import {
+  InvitationTokenDto,
+  RegisterInvitationDto,
+} from './dtos/invitation.dto';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dtos/password/change-password.dto';
 import { ForgotPasswordDto } from './dtos/password/forgot-password.dto';
@@ -34,10 +42,72 @@ type GoogleAuthenticatedRequest = Request & {
 
 @Controller('auth')
 export class AuthController {
+  private readonly invitationAttempts = new Map<
+    string,
+    { count: number; resetAt: number }
+  >();
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly invitationOnboarding: InvitationOnboardingService,
   ) {}
+
+  @Post('invitations/preview')
+  async invitationPreview(
+    @Body() dto: InvitationTokenDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    const token = this.invitationToken(dto, request);
+    const result = await this.invitationOnboarding.preview(token);
+    response.cookie('hemia_invitation', token, {
+      ...this.getBaseCookieOptions(),
+      domain: undefined,
+      maxAge: 3600000,
+    });
+    return result;
+  }
+
+  @Post('invitations/register')
+  async invitationRegister(
+    @Body() dto: RegisterInvitationDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    const user = await this.invitationOnboarding.register({
+      ...dto,
+      token: this.invitationToken(dto, request),
+    });
+    const result = await this.authService.loginExternalUser(
+      user,
+      this.getRequestMetadata(request),
+    );
+    this.setAccessCookie(response, result.accessToken);
+    this.setRefreshCookie(response, result.refreshToken);
+    return { session: result.session };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('invitations/accept')
+  async invitationAccept(
+    @Body() dto: InvitationTokenDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    const result = await this.invitationOnboarding.accept(
+      this.invitationToken(dto, request),
+      user.id,
+    );
+    response.clearCookie('hemia_invitation', {
+      ...this.getBaseCookieOptions(),
+      domain: undefined,
+    });
+    return result;
+  }
 
   @Post('login')
   async login(
@@ -159,6 +229,33 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(user.id, dto);
+  }
+
+  private invitationToken(dto: InvitationTokenDto, request: Request): string {
+    if (
+      request.header('origin') !==
+      new URL(this.configService.getOrThrow<string>('ID_FRONTEND_URL')).origin
+    ) {
+      throw new ForbiddenException('Invalid request origin');
+    }
+    const now = Date.now();
+    for (const [key, attempt] of this.invitationAttempts)
+      if (attempt.resetAt < now) this.invitationAttempts.delete(key);
+    const ip = request.ip ?? 'unknown';
+    const attempt = this.invitationAttempts.get(ip) ?? {
+      count: 0,
+      resetAt: now + 60000,
+    };
+    if (++attempt.count > 120 || this.invitationAttempts.size >= 10000)
+      throw new HttpException(
+        'Too many invitation attempts',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    this.invitationAttempts.set(ip, attempt);
+    const token: unknown = dto.token ?? request.cookies?.hemia_invitation;
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{40,128}$/.test(token))
+      throw new BadRequestException('Invitation token is required');
+    return token;
   }
 
   private setRefreshCookie(response: Response, token: string) {

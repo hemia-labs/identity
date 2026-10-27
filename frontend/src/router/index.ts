@@ -13,6 +13,16 @@ const router = createRouter({
       component: () => import('@/pages/auth/LoginPage.vue'),
     },
     {
+      path: '/auth/callback',
+      name: 'auth-callback',
+      component: () => import('@/pages/auth/GoogleCallbackPage.vue'),
+    },
+    {
+      path: '/invitations',
+      name: 'invitation',
+      component: () => import('@/pages/auth/InvitationPage.vue'),
+    },
+    {
       path: '/register',
       name: 'register',
       component: () => import('@/pages/auth/RegisterPage.vue'),

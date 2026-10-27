@@ -16,7 +16,11 @@ export class UsersService {
     private readonly identityEventsService: IdentityEventsService,
   ) {}
 
-  async create(dto: CreateUserDto, actorClientId?: string) {
+  async create(
+    dto: CreateUserDto,
+    actorClientId?: string,
+    verifiedEmail = false,
+  ) {
     const passwordHash = dto.password
       ? await argon2.hash(dto.password, { type: argon2.argon2id })
       : null;
@@ -25,6 +29,7 @@ export class UsersService {
       email: dto.email.toLowerCase(),
       username: dto.username?.toLowerCase(),
       passwordHash,
+      emailVerified: verifiedEmail,
       status: dto.status ?? UserStatus.Pending,
     });
 

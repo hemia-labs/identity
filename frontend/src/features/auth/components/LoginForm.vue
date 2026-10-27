@@ -12,6 +12,7 @@ import { loginSchema } from '@/features/auth/schemas/auth.schemas'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { useLoginMutation } from '@/features/identity/composables/useIdentityApi'
 import { getErrorMessage } from '@/lib/api'
+import { startGoogleLogin } from '@/features/auth/google-login'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +21,14 @@ const validationSchema = toTypedSchema(loginSchema)
 const loginMutation = useLoginMutation()
 const errorMessage = computed(() => loginMutation.error.value ? getErrorMessage(loginMutation.error.value) : null)
 const showPassword = ref(false)
+const googleError = ref<string | null>(null)
+function googleLogin() {
+  try {
+    startGoogleLogin(typeof route.query.returnTo === 'string' ? route.query.returnTo : null)
+  } catch {
+    googleError.value = 'No se pudo iniciar Google. Habilita el almacenamiento del navegador e intenta de nuevo.'
+  }
+}
 
 async function submit(values: GenericObject) {
   let result
@@ -36,7 +45,7 @@ async function submit(values: GenericObject) {
   authStore.markAuthenticated(result.session.sessionId)
 
   const returnTo = typeof route.query.returnTo === 'string' ? route.query.returnTo : null
-  await router.push(returnTo ? { path: '/consent', query: { returnTo } } : '/session')
+  await router.push(returnTo === '/invitations' ? '/invitations' : returnTo ? { path: '/consent', query: { returnTo } } : '/session')
 }
 </script>
 
@@ -80,6 +89,13 @@ async function submit(values: GenericObject) {
       <Loader2 v-if="isSubmitting || loginMutation.isPending.value" class="mr-2 h-4 w-4 animate-spin" />
       Continuar
     </Button>
+
+    <Button class="h-12 w-full text-base font-bold" variant="outline" type="button" :disabled="isSubmitting || loginMutation.isPending.value" @click="googleLogin">
+      Iniciar sesión con Google
+    </Button>
+    <Alert v-if="googleError" variant="destructive">
+      <AlertDescription>{{ googleError }}</AlertDescription>
+    </Alert>
 
     <div class="rounded-md border border-[#dce6f8] bg-[#f7fbff] p-4">
       <div class="flex items-start gap-3">

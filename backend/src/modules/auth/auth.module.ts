@@ -1,3 +1,5 @@
+import { JwksModule } from '../jwks/jwks.module';
+import { InvitationOnboardingService } from './invitation-onboarding.service';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -16,6 +18,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 @Module({
   imports: [
     PassportModule,
+    JwksModule,
     JwtModule.register({}),
     UsersModule,
     ExternalAccountsModule,
@@ -25,6 +28,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   controllers: [AuthController],
   providers: [
     AuthService,
+    InvitationOnboardingService,
     JwtStrategy,
     {
       provide: GoogleStrategy,
