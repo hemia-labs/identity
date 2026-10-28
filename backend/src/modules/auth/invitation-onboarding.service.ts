@@ -167,11 +167,23 @@ export class InvitationOnboardingService {
     const result = (await this.access('accept', {
       token,
       identity_proof: proof,
-    })) as { accepted?: unknown; membership_id?: unknown } | null;
-    if (result?.accepted !== true || typeof result.membership_id !== 'string')
+    })) as {
+      accepted?: unknown;
+      membership_id?: unknown;
+      redirect_url?: unknown;
+    } | null;
+    if (
+      result?.accepted !== true ||
+      typeof result.membership_id !== 'string' ||
+      typeof result.redirect_url !== 'string'
+    )
       throw new ServiceUnavailableException(
         'Invalid invitation acceptance response',
       );
-    return { accepted: true, membership_id: result.membership_id };
+    return {
+      accepted: true,
+      membership_id: result.membership_id,
+      redirect_url: result.redirect_url,
+    };
   }
 }

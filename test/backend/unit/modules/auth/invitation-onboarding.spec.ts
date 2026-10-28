@@ -99,7 +99,11 @@ function fixture(
         expect(body.token).toBe(token);
         return Promise.resolve(
           new Response(
-            JSON.stringify({ accepted: true, membership_id: 'membership' }),
+            JSON.stringify({
+              accepted: true,
+              membership_id: 'membership',
+              redirect_url: 'https://app.example.test/',
+            }),
           ),
         );
       }
@@ -176,6 +180,7 @@ describe('Invitation onboarding trust boundary', () => {
     await expect(service.accept(token, 'user')).resolves.toEqual({
       accepted: true,
       membership_id: 'membership',
+      redirect_url: 'https://app.example.test/',
     });
   });
 });
