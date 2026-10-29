@@ -68,7 +68,6 @@ jobs:
       - name: Find pending Identity changesets
         id: changesets
         run: |
-          git branch develop origin/develop
           node scripts/identity-version.mjs pending
       - name: Create a GitHub App token when configured
         id: app-token

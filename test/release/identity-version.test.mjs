@@ -75,10 +75,12 @@ for (const target of ['identity', 'auth']) {
       if (target === 'identity') {
         git('update-ref', 'refs/remotes/origin/main', 'HEAD');
         const workflow = readFileSync(join(root, '.github/workflows/identity-release.yml'), 'utf8');
-        const command = workflow.match(/^          (node scripts\/identity-version.mjs pending)$/m)?.[1];
-        assert(command, 'Pending notes must be read independently of the Git base');
+        const step = workflow.split('      - name: Find pending Identity changesets\n')[1]?.split('\n      - ')[0];
+        const command = step?.split('        run: |\n')[1]?.split('\n')
+          .map(line => line.replace(/^          /, '')).join('\n').trim();
+        assert(command, 'Expected the complete pending changesets workflow step');
         const output = join(dir, 'pending-output');
-        execFileSync(process.execPath, [join(dir, 'scripts/identity-version.mjs'), 'pending'], {
+        execFileSync('bash', ['-e', '-c', command], {
           cwd: dir, env: { ...process.env, GITHUB_OUTPUT: output }, stdio: 'pipe',
         });
         assert.equal(readFileSync(output, 'utf8'), 'pending=true\n');
