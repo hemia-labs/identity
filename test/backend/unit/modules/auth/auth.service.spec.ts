@@ -130,4 +130,18 @@ describe('AuthService', () => {
       'http://localhost:5173/auth/callback',
     );
   });
+
+  it('binds recovery to the invitation present when Google login started', () => {
+    const service = new AuthService(new ConfigService({
+      OAUTH_STATE_SECRET: 's'.repeat(64),
+      AUTH_ALLOWED_REDIRECT_URIS: 'http://localhost:5173/auth/callback',
+    }), new JwtService(), {} as UsersService, {} as SessionsService, {} as RefreshTokensService);
+    const state = service.createGoogleOAuthState('http://localhost:5173/auth/callback', 'original-token');
+    expect(service.resolveGoogleInvitationToken(state, 'original-token')).toBe('original-token');
+    expect(() => service.resolveGoogleInvitationToken(state, 'other-token')).toThrow('Invalid invitation OAuth state');
+    expect(() => service.resolveGoogleInvitationToken(state)).toThrow();
+    expect(() => service.resolveGoogleInvitationToken(state + 'invalid', 'original-token')).toThrow();
+    const normalState = service.createGoogleOAuthState('http://localhost:5173/auth/callback');
+    expect(service.resolveGoogleInvitationToken(normalState, 'original-token')).toBeUndefined();
+  });
 });

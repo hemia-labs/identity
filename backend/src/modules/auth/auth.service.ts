@@ -107,7 +107,7 @@ export class AuthService {
     };
   }
 
-  createGoogleOAuthState(redirectUri: string) {
+  createGoogleOAuthState(redirectUri: string, invitationToken?: string) {
     this.assertAllowedRedirectUri(redirectUri);
 
     return this.jwtService.sign(
@@ -115,6 +115,7 @@ export class AuthService {
         nonce: randomUUID(),
         purpose: 'google_login_redirect',
         redirectUri,
+        ...(invitationToken && { invitationTokenHash: this.hashToken(invitationToken) }),
       } satisfies OAuthStatePayload,
       {
         secret: this.configService.getOrThrow<string>('OAUTH_STATE_SECRET'),
@@ -124,6 +125,19 @@ export class AuthService {
   }
 
   resolveGoogleRedirectUri(state: string) {
+    return this.resolveGoogleState(state).redirectUri;
+  }
+
+  resolveGoogleInvitationToken(state: string, token?: string): string | undefined {
+    const payload = this.resolveGoogleState(state);
+    if (!payload.invitationTokenHash) return undefined;
+    if (!token || this.hashToken(token) !== payload.invitationTokenHash) {
+      throw new BadRequestException('Invalid invitation OAuth state');
+    }
+    return token;
+  }
+
+  private resolveGoogleState(state: string) {
     try {
       const payload = this.jwtService.verify<OAuthStatePayload>(state, {
         secret: this.configService.getOrThrow<string>('OAUTH_STATE_SECRET'),
@@ -134,7 +148,7 @@ export class AuthService {
       }
 
       this.assertAllowedRedirectUri(payload.redirectUri);
-      return payload.redirectUri;
+      return payload;
     } catch {
       throw new BadRequestException('Invalid or expired OAuth state');
     }

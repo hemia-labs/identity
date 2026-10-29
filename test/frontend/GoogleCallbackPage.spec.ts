@@ -63,11 +63,15 @@ describe('Google callback', () => {
     expect(replace).not.toHaveBeenCalled()
   })
 
-  it.each(['account_link_required', 'google_auth_failed'])('handles %s without accepting an existing session', async error => {
+  it.each([
+    ['account_link_required', 'método habitual'],
+    ['user_not_found', 'El usuario no existe'],
+    ['google_auth_failed', 'Intenta de nuevo'],
+  ])('handles %s without accepting an existing session', async (error, message) => {
     query.error = error
     const { wrapper, store } = render()
     await flushPromises()
-    expect(wrapper.text()).toContain(error === 'account_link_required' ? 'método habitual' : 'Intenta de nuevo')
+    expect(wrapper.text()).toContain(message)
     expect(getSession).not.toHaveBeenCalled()
     expect(store.isAuthenticated).toBe(false)
   })

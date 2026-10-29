@@ -8,6 +8,7 @@ export function startGoogleLogin(returnTo: string | null) {
   if (returnTo) sessionStorage.setItem(RETURN_TO_KEY, returnTo)
   const url = new URL(`${API_BASE_URL}/auth/google`, window.location.origin)
   url.searchParams.set('redirect_uri', new URL('/auth/callback', window.location.origin).toString())
+  if (returnTo === '/invitations') url.searchParams.set('invitation', '1')
   window.location.assign(url.toString())
 }
 

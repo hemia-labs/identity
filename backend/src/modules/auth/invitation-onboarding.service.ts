@@ -84,6 +84,7 @@ export class InvitationOnboardingService {
       const proof = await this.jwt.verifyAsync<{
         email: string;
         token_hash: string;
+        invitation_issued_at?: string;
       }>(data.proof, {
         publicKey: createPublicKey({ key, format: 'jwk' })
           .export({ type: 'spki', format: 'pem' })
@@ -102,6 +103,7 @@ export class InvitationOnboardingService {
         email: proof.email,
         organization: data.organization,
         expiresAt: data.expiresAt,
+        issuedAt: proof.invitation_issued_at,
       };
     } catch {
       throw new BadRequestException('Invalid invitation proof');

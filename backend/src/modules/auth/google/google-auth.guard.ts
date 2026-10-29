@@ -53,7 +53,10 @@ export class GoogleAuthGuard extends AuthGuard('google') {
         error instanceof ForbiddenException &&
           error.message === 'GOOGLE_ACCOUNT_LINK_REQUIRED'
           ? 'account_link_required'
-          : 'google_auth_failed',
+          : error instanceof ForbiddenException &&
+              error.message === 'GOOGLE_USER_NOT_FOUND'
+            ? 'user_not_found'
+            : 'google_auth_failed',
       );
       const response = context.switchToHttp().getResponse<Response>();
       response.clearCookie(OAUTH_STATE_COOKIE, {
@@ -93,7 +96,18 @@ export class GoogleAuthGuard extends AuthGuard('google') {
       throw new BadRequestException('redirect_uri query parameter is required');
     }
 
-    const state = this.authService.createGoogleOAuthState(redirectUri);
+    const invitationToken: unknown = request.query.invitation === '1'
+      ? request.cookies?.hemia_invitation
+      : undefined;
+    if (request.query.invitation === '1' && (
+      typeof invitationToken !== 'string' || !/^[A-Za-z0-9_-]{40,128}$/.test(invitationToken)
+    )) {
+      throw new BadRequestException('Invitation token is required');
+    }
+    const state = this.authService.createGoogleOAuthState(
+      redirectUri,
+      typeof invitationToken === 'string' ? invitationToken : undefined,
+    );
     response.cookie(OAUTH_STATE_COOKIE, state, {
       httpOnly: true,
       secure: this.configService.get<boolean>('cookie.secure', false),

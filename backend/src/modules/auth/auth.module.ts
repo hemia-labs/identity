@@ -32,14 +32,16 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtStrategy,
     {
       provide: GoogleStrategy,
-      inject: [ConfigService, ExternalAccountsService],
+      inject: [ConfigService, ExternalAccountsService, AuthService, InvitationOnboardingService],
       useFactory: (
         config: ConfigService,
         externalAccounts: ExternalAccountsService,
+        auth: AuthService,
+        invitations: InvitationOnboardingService,
       ) =>
         config.get<string>('GOOGLE_CLIENT_ID') &&
         config.get<string>('GOOGLE_CLIENT_SECRET')
-          ? new GoogleStrategy(config, externalAccounts)
+          ? new GoogleStrategy(config, externalAccounts, auth, invitations)
           : null,
     },
     GoogleAuthGuard,

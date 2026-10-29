@@ -4,12 +4,15 @@ import { UserEntity, UserStatus } from '../users/entities/user.entity';
 import { ExternalAccountProvider } from './entities/external-account-provider.enum';
 import { ExternalAccountEntity } from './entities/external-account.entity';
 import { GoogleUserInput } from './types/google-user-input.type';
+import { SessionEntity } from '../sessions/entities/session.entity';
+import { OAuthTokenEntity } from '../oauth/entities/oauth-token.entity';
+import { IdentityEventEntity, IdentityEventType } from '../identity-events/entities/identity-event.entity';
 
 @Injectable()
 export class ExternalAccountsService {
   constructor(private readonly dataSource: DataSource) {}
 
-  async findOrCreateGoogleUser(input: GoogleUserInput): Promise<UserEntity> {
+  async findOrCreateGoogleUser(input: GoogleUserInput, invitationEmail?: string, invitationIssuedAt?: string): Promise<UserEntity> {
     if (!input.emailVerified) {
       throw new ForbiddenException('Google email must be verified');
     }
@@ -32,6 +35,60 @@ export class ExternalAccountsService {
       });
 
       if (existingAccount) {
+        if (invitationEmail === email && (
+          !existingAccount.user || existingAccount.user.deletedAt || existingAccount.user.status === UserStatus.Deleted
+        )) {
+          const user = await usersRepository.findOne({
+            where: { id: existingAccount.userId },
+            withDeleted: true,
+            lock: { mode: 'pessimistic_write' },
+          });
+          if (user && user.email === email && (
+            user.status === UserStatus.Deleted || (user.deletedAt && user.status === UserStatus.Active)
+          )) {
+            if (!user.deletedAt || !invitationIssuedAt || !(
+              Date.parse(invitationIssuedAt) > user.deletedAt.getTime()
+            )) {
+              throw new ForbiddenException('GOOGLE_USER_NOT_FOUND');
+            }
+            // A replacement account must never be merged into the deleted identity.
+            const replacement = await usersRepository.findOne({ where: { email, deletedAt: IsNull() } });
+            if (replacement && replacement.id !== user.id) {
+              throw new ForbiddenException('GOOGLE_ACCOUNT_LINK_REQUIRED');
+            }
+            await manager.getRepository(SessionEntity).update(
+              { userId: user.id, isActive: true },
+              { isActive: false, revokedAt: new Date() },
+            );
+            await manager.getRepository(OAuthTokenEntity).update(
+              { userId: user.id, revokedAt: IsNull() },
+              { revokedAt: new Date() },
+            );
+            user.status = UserStatus.Active;
+            user.deletedAt = null;
+            user.lockedAt = null;
+            user.emailVerified = true;
+            const restored = await usersRepository.save(user);
+            await manager.getRepository(IdentityEventEntity).save({
+              type: IdentityEventType.UserUpdated,
+              userId: restored.id,
+              payload: {
+                operation: 'invitation_reactivation',
+                user: {
+                  sub: restored.id, email: restored.email,
+                  name: `${restored.firstName} ${restored.lastName}`.trim(),
+                  firstName: restored.firstName, lastName: restored.lastName,
+                  avatarUrl: restored.avatarUrl, status: 'active', rawStatus: restored.status,
+                  createdAt: restored.createdAt, updatedAt: restored.updatedAt, deletedAt: null,
+                },
+              },
+            });
+            return restored;
+          }
+          this.assertActive(user);
+          if (user && user.email === email) return user;
+          throw new ForbiddenException('GOOGLE_USER_NOT_FOUND');
+        }
         this.assertActive(existingAccount.user);
         return existingAccount.user;
       }
@@ -71,7 +128,10 @@ export class ExternalAccountsService {
     });
   }
 
-  private assertActive(user: UserEntity) {
+  private assertActive(user: UserEntity | null) {
+    if (!user || user.deletedAt || user.status === UserStatus.Deleted) {
+      throw new ForbiddenException('GOOGLE_USER_NOT_FOUND');
+    }
     if (user.status !== UserStatus.Active) {
       throw new ForbiddenException('User account is not active');
     }

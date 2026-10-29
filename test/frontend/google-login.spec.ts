@@ -21,4 +21,12 @@ describe('Google login navigation', () => {
     startGoogleLogin(null)
     expect(consumeGoogleReturnTo()).toBeNull()
   })
+  it('requests invitation recovery only from invitation onboarding', () => {
+    const assign = vi.fn()
+    vi.stubGlobal('window', { location: { origin: 'https://id.example.test', assign } })
+    startGoogleLogin('/invitations')
+    expect(new URL(assign.mock.calls[0]![0]).searchParams.get('invitation')).toBe('1')
+    startGoogleLogin(null)
+    expect(new URL(assign.mock.calls[1]![0]).searchParams.has('invitation')).toBe(false)
+  })
 })

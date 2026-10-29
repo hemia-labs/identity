@@ -21,7 +21,9 @@ onMounted(async () => {
     if (route.query.error) {
       errorMessage.value = route.query.error === 'account_link_required'
         ? 'Este correo ya tiene una cuenta en Hemia ID. Inicia sesión con tu método habitual; Google aún no está vinculado.'
-        : 'No se pudo completar el inicio de sesión con Google. Intenta de nuevo.'
+        : route.query.error === 'user_not_found'
+          ? 'El usuario no existe. Contacta al administrador para recuperar el acceso.'
+          : 'No se pudo completar el inicio de sesión con Google. Intenta de nuevo.'
       return
     }
     const session = await getSession()
