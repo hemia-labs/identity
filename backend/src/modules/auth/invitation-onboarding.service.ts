@@ -84,6 +84,7 @@ export class InvitationOnboardingService {
       const proof = await this.jwt.verifyAsync<{
         email: string;
         token_hash: string;
+        invitation_issued_at?: string;
       }>(data.proof, {
         publicKey: createPublicKey({ key, format: 'jwk' })
           .export({ type: 'spki', format: 'pem' })
@@ -102,6 +103,7 @@ export class InvitationOnboardingService {
         email: proof.email,
         organization: data.organization,
         expiresAt: data.expiresAt,
+        issuedAt: proof.invitation_issued_at,
       };
     } catch {
       throw new BadRequestException('Invalid invitation proof');
@@ -167,11 +169,23 @@ export class InvitationOnboardingService {
     const result = (await this.access('accept', {
       token,
       identity_proof: proof,
-    })) as { accepted?: unknown; membership_id?: unknown } | null;
-    if (result?.accepted !== true || typeof result.membership_id !== 'string')
+    })) as {
+      accepted?: unknown;
+      membership_id?: unknown;
+      redirect_url?: unknown;
+    } | null;
+    if (
+      result?.accepted !== true ||
+      typeof result.membership_id !== 'string' ||
+      typeof result.redirect_url !== 'string'
+    )
       throw new ServiceUnavailableException(
         'Invalid invitation acceptance response',
       );
-    return { accepted: true, membership_id: result.membership_id };
+    return {
+      accepted: true,
+      membership_id: result.membership_id,
+      redirect_url: result.redirect_url,
+    };
   }
 }

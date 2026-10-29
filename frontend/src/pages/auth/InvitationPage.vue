@@ -4,7 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import AuthLayout from '@/app/layouts/AuthLayout.vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { startGoogleLogin } from '@/features/auth/google-login'
 import { fetchJson, getErrorMessage } from '@/lib/api'
 import { getSession } from '@/features/identity/api/identity.api'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
@@ -18,10 +18,6 @@ const pending = ref(false)
 const error = ref<string | null>(null)
 const accepted = ref(false)
 const initialToken = ref<string | null>(null)
-const firstName = ref('')
-const lastName = ref('')
-const password = ref('')
-const confirmPassword = ref('')
 const terms = ref(false)
 
 function invitationError(e: unknown) {
@@ -54,31 +50,24 @@ async function accept() {
   pending.value = true
   error.value = null
   try {
-    await fetchJson('/auth/invitations/accept', { method: 'POST', body: {} })
+    const result = await fetchJson<{ redirect_url: string }>('/auth/invitations/accept', { method: 'POST', body: {} })
     accepted.value = true
+    window.location.assign(result.redirect_url)
   } catch (e) { error.value = invitationError(e) }
   finally { pending.value = false }
 }
 
-async function register() {
-  if (password.value !== confirmPassword.value) { error.value = 'Las contraseñas no coinciden'; return }
-  pending.value = true
-  error.value = null
+function googleLogin() {
   try {
-    const result = await fetchJson<{ session: { sessionId: string } }>('/auth/invitations/register', {
-      method: 'POST', body: { firstName: firstName.value, lastName: lastName.value, password: password.value },
-    })
-    password.value = ''; confirmPassword.value = ''
-    sessionEmail.value = invitation.value!.email
-    auth.markAuthenticated(result.session.sessionId)
-    await accept()
-  } catch (e) { error.value = invitationError(e) }
-  finally { pending.value = false }
+    startGoogleLogin('/invitations')
+  } catch {
+    error.value = 'No se pudo iniciar Google. Habilita el almacenamiento del navegador e intenta de nuevo.'
+  }
 }
 </script>
 
 <template>
-  <AuthLayout eyebrow="Invitación" title="Únete a Hemia" description="Crea tu cuenta o inicia sesión para aceptar la invitación a tu organización.">
+  <AuthLayout eyebrow="Invitación" title="Únete a Hemia" description="Continúa con Google para aceptar la invitación a tu organización.">
     <div class="space-y-5">
       <p v-if="loading" role="status">Verificando invitación…</p>
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
@@ -94,17 +83,10 @@ async function register() {
           <Button as-child variant="outline" class="w-full"><RouterLink :to="{ path: '/login', query: { returnTo: '/invitations' } }">Usar otra cuenta</RouterLink></Button>
         </template>
         <template v-else>
-          <Button as-child variant="outline" class="w-full"><RouterLink :to="{ path: '/login', query: { returnTo: '/invitations' } }">Ya tengo cuenta / Iniciar sesión con Google</RouterLink></Button>
-          <form class="space-y-4" @submit.prevent="register">
-            <h2 class="font-bold">Crear cuenta y aceptar invitación</h2>
-            <label class="block">Correo<Input :model-value="invitation.email" type="email" readonly /></label>
-            <label class="block">Nombre<Input v-model="firstName" autocomplete="given-name" required maxlength="100" /></label>
-            <label class="block">Apellidos<Input v-model="lastName" autocomplete="family-name" maxlength="100" /></label>
-            <label class="block">Contraseña<Input v-model="password" type="password" autocomplete="new-password" required minlength="8" maxlength="255" /></label>
-            <label class="block">Confirmar contraseña<Input v-model="confirmPassword" type="password" autocomplete="new-password" required minlength="8" maxlength="255" /></label>
-            <label class="flex gap-2"><input v-model="terms" type="checkbox" required />Acepto los <a href="/terminos-y-condiciones" target="_blank" rel="noopener">términos</a> y el <a href="/aviso-de-privacidad" target="_blank" rel="noopener">aviso de privacidad</a>.</label>
-            <Button class="w-full" type="submit" :disabled="pending || !terms">{{ pending ? 'Creando cuenta…' : 'Crear cuenta y unirme' }}</Button>
-          </form>
+          <p>Usa la cuenta de Google con el correo invitado. Obtendremos tu nombre y apellidos de Google.</p>
+          <label class="flex gap-2"><input v-model="terms" type="checkbox" />Acepto los <a href="/terminos-y-condiciones" target="_blank" rel="noopener">términos</a> y el <a href="/aviso-de-privacidad" target="_blank" rel="noopener">aviso de privacidad</a>.</label>
+          <Button class="w-full" :disabled="!terms" @click="googleLogin">Continuar con Google</Button>
+          <Button as-child variant="outline" class="w-full"><RouterLink :to="{ path: '/login', query: { returnTo: '/invitations' } }">Acceder con contraseña</RouterLink></Button>
         </template>
       </template>
       <Button v-if="error && !invitation" variant="outline" @click="load">Reintentar</Button>

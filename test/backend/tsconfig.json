@@ -23,6 +23,9 @@
       "@nestjs/testing": [
         "node_modules/@nestjs/testing"
       ],
+      "dotenv": [
+        "node_modules/dotenv"
+      ],
       "argon2": [
         "node_modules/argon2"
       ],

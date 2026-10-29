@@ -11,7 +11,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/src/main.js",
+    "start:prod": "NODE_ENV=production node dist/src/main.js",
     "lint": "cd .. && backend/node_modules/.bin/eslint --config backend/eslint.config.mjs \"backend/{src,apps,libs}/**/*.ts\" \"test/backend/**/*.ts\" --fix",
     "typeorm": "typeorm-ts-node-commonjs -d data-source.ts",
     "migration:generate": "bun run typeorm migration:generate src/database/migrations/Migration",

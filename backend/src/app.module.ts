@@ -6,6 +6,7 @@ import databaseConfig from './config/database.config';
 import emailConfig from './config/email.config';
 import { envValidationSchema } from './config/env.validation';
 import jwtConfig from './config/jwt.config';
+import { environmentFile } from './config/env-file';
 import { DatabaseModule } from './database/database.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -26,7 +27,7 @@ import { UsersModule } from './modules/users/users.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: environmentFile(),
       load: [appConfig, cookieConfig, databaseConfig, emailConfig, jwtConfig],
       validationSchema: envValidationSchema,
       validationOptions: {

@@ -23,6 +23,7 @@ function fixture(
   const proof = jwt.sign(
     {
       email: 'invitee@example.test',
+      invitation_issued_at: '2026-10-29T00:00:00Z',
       token_hash:
         options.hash ?? createHash('sha256').update(token).digest('hex'),
     },
@@ -99,7 +100,11 @@ function fixture(
         expect(body.token).toBe(token);
         return Promise.resolve(
           new Response(
-            JSON.stringify({ accepted: true, membership_id: 'membership' }),
+            JSON.stringify({
+              accepted: true,
+              membership_id: 'membership',
+              redirect_url: 'https://app.example.test/',
+            }),
           ),
         );
       }
@@ -115,6 +120,10 @@ function fixture(
 }
 afterEach(() => jest.restoreAllMocks());
 describe('Invitation onboarding trust boundary', () => {
+  it('returns the invitation issuance date from the signed proof', async () => {
+    const { service } = fixture();
+    expect((await service.preview(token)).issuedAt).toBe('2026-10-29T00:00:00Z');
+  });
   it('registers only the email proven by Access, as active and verified', async () => {
     const { service, users } = fixture();
     await service.register({
@@ -176,6 +185,7 @@ describe('Invitation onboarding trust boundary', () => {
     await expect(service.accept(token, 'user')).resolves.toEqual({
       accepted: true,
       membership_id: 'membership',
+      redirect_url: 'https://app.example.test/',
     });
   });
 });
