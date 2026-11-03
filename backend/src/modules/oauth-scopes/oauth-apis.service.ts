@@ -14,7 +14,8 @@ export type OAuthApi = Omit<SaveOAuthApiDto, 'resource'> & {
 export class OAuthApisService {
   constructor(private readonly db: DataSource) {}
   list(): Promise<OAuthApi[]> {
-    return this.db.query(`SELECT a.id,a.name,a.audience,a.resource,a.enabled,
+    return this.db
+      .query(`SELECT a.id,a.name,a.description,a.audience,a.resource,a.enabled,
       COALESCE(array_agg(s.code ORDER BY s.code) FILTER (WHERE s.code IS NOT NULL),'{}') AS scopes
       FROM oauth_apis a LEFT JOIN oauth_api_scopes r ON r.api_id=a.id
       LEFT JOIN oauth_scopes s ON s.id=r.scope_id GROUP BY a.id ORDER BY a.name,a.audience`);
@@ -73,13 +74,14 @@ export class OAuthApisService {
           );
         const [api]: OAuthApi[] = await manager.query(
           id
-            ? 'UPDATE oauth_apis SET name=$2,resource=$3,enabled=$4,updated_at=now() WHERE audience=$1 AND id=$5 RETURNING *'
-            : 'INSERT INTO oauth_apis(audience,name,resource,enabled) VALUES($1,$2,$3,$4) RETURNING *',
+            ? 'UPDATE oauth_apis SET name=$2,resource=$3,enabled=$4,description=COALESCE($5,description),updated_at=now() WHERE audience=$1 AND id=$6 RETURNING *'
+            : "INSERT INTO oauth_apis(audience,name,resource,enabled,description) VALUES($1,$2,$3,$4,COALESCE($5,'')) RETURNING *",
           [
             dto.audience,
             dto.name.trim(),
             resource,
             dto.enabled,
+            dto.description?.trim() ?? null,
             ...(id ? [id] : []),
           ],
         );

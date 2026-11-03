@@ -45,6 +45,8 @@ export class OAuthClientsService {
       .save(
         this.clientsRepository.create({
           clientId: dto.clientId.toLowerCase(),
+          name: dto.name?.trim() || null,
+          description: dto.description?.trim() || null,
           audience: dto.audience,
           serviceDestinations: dto.serviceDestinations ?? null,
           type: dto.type,
@@ -89,6 +91,10 @@ export class OAuthClientsService {
     );
     Object.assign(client, {
       ...dto,
+      ...(dto.name !== undefined ? { name: dto.name?.trim() || null } : {}),
+      ...(dto.description !== undefined
+        ? { description: dto.description?.trim() || null }
+        : {}),
       clientId: dto.clientId?.toLowerCase() ?? client.clientId,
     });
     return this.toView(await this.clientsRepository.save(client));

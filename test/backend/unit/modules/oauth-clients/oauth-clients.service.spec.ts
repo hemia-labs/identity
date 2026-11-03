@@ -37,6 +37,22 @@ const createService = () => {
 };
 
 describe('OAuthClientsService', () => {
+  it('updates descriptive metadata without changing credentials or grants', async () => {
+    const { service } = createService();
+    const updated = await service.update('client-id', {
+      name: '  Integraciones de Console  ',
+      description: '  Consulta los servicios compartidos.  ',
+    });
+    expect(updated.name).toBe('Integraciones de Console');
+    expect(updated.description).toBe('Consulta los servicios compartidos.');
+    expect(updated.scopes).toEqual(['openid']);
+    expect(updated.grantTypes).toEqual(['authorization_code']);
+    expect('clientSecretHash' in updated).toBe(false);
+
+    const cleared = await service.update('client-id', { description: '' });
+    expect(cleared.description).toBeNull();
+    expect(cleared.name).toBe(updated.name);
+  });
   it('adds values once and never exposes clientSecretHash', async () => {
     const { service } = createService();
 

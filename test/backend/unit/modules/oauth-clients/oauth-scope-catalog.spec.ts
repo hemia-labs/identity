@@ -117,6 +117,7 @@ test('API registration stores a normalized resource and catalog links in one tra
   await expect(
     service.save({
       name: 'Notifications',
+      description: '  Envío de notificaciones.  ',
       audience: 'notifications-api',
       resource: 'https://notifications.example/',
       scopes: [dto.code],
@@ -124,6 +125,10 @@ test('API registration stores a normalized resource and catalog links in one tra
     }),
   ).resolves.toMatchObject({ id: 'api-id', scopes: [dto.code] });
   expect(transaction).toHaveBeenCalledTimes(1);
+  expect(query).toHaveBeenCalledWith(
+    expect.stringContaining('INSERT INTO oauth_apis('),
+    ['notifications-api', 'Notifications', 'https://notifications.example', true, 'Envío de notificaciones.'],
+  );
   expect(query).toHaveBeenCalledWith(
     expect.stringContaining('INSERT INTO oauth_api_scopes'),
     ['api-id', ['scope-id']],
