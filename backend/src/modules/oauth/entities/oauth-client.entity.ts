@@ -37,6 +37,12 @@ export class OAuthClientEntity {
   @Column({ name: 'client_id', length: 120 })
   clientId: string;
 
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  name?: string | null;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  description?: string | null;
+
   @Column({ length: 160 })
   audience: string;
 

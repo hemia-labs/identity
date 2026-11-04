@@ -61,6 +61,16 @@ export class CreateOAuthClientDto {
   @MaxLength(120)
   clientId: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string;
+
   @IsString()
   @MaxLength(160)
   audience: string;
