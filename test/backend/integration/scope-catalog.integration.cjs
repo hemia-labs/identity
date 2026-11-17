@@ -33,6 +33,11 @@ const db = new DataSource({ type: 'postgres', host: '127.0.0.1', port,
     const api = await apis.save({ audience: 'notifications-api', resource: 'https://notifications.example/', name: 'Notifications', enabled: true, scopes: [registered.code] });
     assert.equal(api.resource, 'https://notifications.example');
     assert.deepEqual(api.scopes, [registered.code]);
+    const additional = await catalog.save({ code: 'notifications.webhooks.deliver', name: 'Entregar webhooks', description: 'Synthetic QA permission', enabled: true });
+    const updated = await apis.save({ ...api, scopes: [registered.code, additional.code] }, api.id);
+    assert.equal(updated.id, api.id);
+    assert.deepEqual(updated.scopes, [registered.code, additional.code]);
+    assert.deepEqual((await apis.list()).find(row => row.id === api.id).scopes, [registered.code, additional.code]);
     await assert.rejects(apis.save({ ...api, name: 'Duplicate API' }), e => e.status === 409);
     assert.deepEqual((await repository.findOneByOrFail({ id: original.id })).serviceDestinations, original.serviceDestinations);
     const clients = new OAuthClientsService(repository);

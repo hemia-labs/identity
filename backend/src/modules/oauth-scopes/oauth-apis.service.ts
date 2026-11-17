@@ -74,7 +74,10 @@ export class OAuthApisService {
           );
         const [api]: OAuthApi[] = await manager.query(
           id
-            ? 'UPDATE oauth_apis SET name=$2,resource=$3,enabled=$4,description=COALESCE($5,description),updated_at=now() WHERE audience=$1 AND id=$6 RETURNING *'
+            ? `WITH updated AS (
+                UPDATE oauth_apis SET name=$2,resource=$3,enabled=$4,description=COALESCE($5,description),updated_at=now()
+                WHERE audience=$1 AND id=$6 RETURNING *
+              ) SELECT * FROM updated`
             : "INSERT INTO oauth_apis(audience,name,resource,enabled,description) VALUES($1,$2,$3,$4,COALESCE($5,'')) RETURNING *",
           [
             dto.audience,
