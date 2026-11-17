@@ -1,5 +1,11 @@
 # backend
 
+## 1.2.2
+
+### Patch Changes
+
+- f3f1119: Corrige la actualización de APIs OAuth existentes para conservar el identificador de la API al asignar sus permisos.
+
 ## 1.2.1
 
 ### Patch Changes
